@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Better YCOJ
-// @version      1.1.3
+// @version      1.1.4
 // @description  更好的 YCOJ
 // @author       Aak
 // @match        http://10.1.143.113/*
@@ -23,7 +23,7 @@ const pasteId = "aifqpqnw";
 let solutionMapping = [];
 const colorMap = ["#000000", "#FE4C61", "#F39C11", "#FFC116", "#52C41A", "#3498DB", "#9D3DCF", "#0E1D69"];
 const diffMap = ["暂无评定", "入门", "普及−", "普及/提高−", "普及+/提高", "提高+/省选−", "省选/NOI−", "NOI/NOI+/CTSC"];
-const version = "1.1.3";
+const version = "1.1.4";
 
 function loadScript() {
     var colorPlugin = document.createElement('script');
@@ -42,7 +42,6 @@ function loadScript() {
 }
 
 function loadMapping() {
-    console.log("Loading Solution Mapping...")
     GM_xmlhttpRequest({
         url: "https://www.luogu.com.cn/paste/" + pasteId + "?_contentOnly=1",
         method: "GET",
@@ -62,7 +61,6 @@ function loadMapping() {
 				}
             }
             solutionMapping = data;
-            console.log("Solutions loaded");
             solutionLoaded = true;
         }
     });
@@ -81,14 +79,12 @@ window.addEventListener('load', function() {
     }, 10);
     setTimeout(() => {
         if("function" == typeof unsafeWindow.define && unsafeWindow.define.amd) {
-            console.log("detected monaco editor.");
             delete unsafeWindow.define.amd;
             loadScript();
             clearInterval(intervalId);
             return;
         }
         if (!unsafeWindow.editor) {
-            console.log("no editor, loaded.");
             loadScript();
             clearInterval(intervalId);
             return;
