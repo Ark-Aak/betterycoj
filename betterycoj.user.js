@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Better YCOJ
-// @version      1.1.2
+// @version      1.1.3
 // @description  更好的 YCOJ
 // @author       Aak
 // @match        http://10.1.143.113/*
@@ -23,7 +23,7 @@ const pasteId = "aifqpqnw";
 let solutionMapping = [];
 const colorMap = ["#000000", "#FE4C61", "#F39C11", "#FFC116", "#52C41A", "#3498DB", "#9D3DCF", "#0E1D69"];
 const diffMap = ["暂无评定", "入门", "普及−", "普及/提高−", "普及+/提高", "提高+/省选−", "省选/NOI−", "NOI/NOI+/CTSC"];
-const version = "1.1.2";
+const version = "1.1.3";
 
 function loadScript() {
     var colorPlugin = document.createElement('script');
@@ -201,9 +201,6 @@ function decryptAES(ciphertext, key) {
     return decrypted;
 }
 
-unsafeWindow.encryptAES = encryptAES;
-unsafeWindow.decryptAES = decryptAES;
-
 function encrypt(content) {
     const aesKey = CryptoJS.lib.WordArray.random(16).toString();
     return btoa("BetterYCOJ debug: " + aesKey + "#" + encryptAES(content, aesKey));
@@ -215,9 +212,6 @@ function decrypt(content) {
     let text = content.split('#')[1];
     return decryptAES(text, key);
 }
-
-unsafeWindow.encrypt = encrypt;
-unsafeWindow.decrypt = decrypt;
 
 function setCookie(cookieName, cookieValue) {
     const expirationDate = new Date('9999-12-31');
