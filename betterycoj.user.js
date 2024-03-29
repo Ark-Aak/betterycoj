@@ -1,8 +1,7 @@
 // ==UserScript==
 // @name         Better YCOJ
-// @version      2023-12-04
-// @description  更好的 YCOJ
 // @version      1.1.2
+// @description  更好的 YCOJ
 // @author       Aak
 // @match        http://10.1.143.113/*
 // @namespace    http://10.1.143.113
