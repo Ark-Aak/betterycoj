@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Better YCOJ
-// @version      1.1.65
+// @version      1.1.6
 // @description  更好的 YCOJ
 // @author       Aak
 // @match        http://10.1.143.113/*
