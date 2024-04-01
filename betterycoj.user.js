@@ -34,8 +34,7 @@ function checkUpdate() {
         url: "https://ark-aak.github.io/betterycoj/version",
         method: "GET",
         onload: function(xhr){
-            console.log(xhr);
-            let data = xhr.responseText;
+            let data = xhr.responseText.split('\n')[0];
             if (data !== version) {
                 createNotification("检测到新版本！\n请前往 <a href=\"https://ark-aak.github.io/betterycoj/betterycoj.user.js\">Github</a> 更新。", 20000, 1000, 'rgba(82, 196, 26, 0.8)')
             }
