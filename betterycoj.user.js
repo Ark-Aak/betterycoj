@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Better YCOJ
-// @version      1.1.4
+// @version      1.1.5
 // @description  更好的 YCOJ
 // @author       Aak
 // @match        http://10.1.143.113/*
@@ -10,35 +10,37 @@
 // @grant        unsafeWindow
 // @grant        GM_xmlhttpRequest
 // @connect      luogu.com.cn
+// @connect      ark-aak.github.io
 // @license      MIT
+// @require    https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js
+// @require    https://cdn.jsdelivr.net/npm/jquery-color@2.2.0/dist/jquery.color.min.js
+// @require    https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js
+// @require    https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js
 // ==/UserScript==
-
-let loaded = false;
 
 let problemDb = null;
 let contestDb = null;
 let infoDb = null;
 let solutionLoaded = false;
+let minLen = 1000000000;
 const pasteId = "aifqpqnw";
 let solutionMapping = [];
-const colorMap = ["#000000", "#FE4C61", "#F39C11", "#FFC116", "#52C41A", "#3498DB", "#9D3DCF", "#0E1D69"];
+const colorMap = ["#7F7F7F", "#FE4C61", "#F39C11", "#FFC116", "#52C41A", "#3498DB", "#9D3DCF", "#0E1D69"];
 const diffMap = ["暂无评定", "入门", "普及−", "普及/提高−", "普及+/提高", "提高+/省选−", "省选/NOI−", "NOI/NOI+/CTSC"];
-const version = "1.1.4";
+const version = "1.1.5";
 
-function loadScript() {
-    var colorPlugin = document.createElement('script');
-    colorPlugin.src = 'https://cdn.jsdelivr.net/npm/jquery-color@2.2.0/dist/jquery.color.min.js';
-    colorPlugin.type = 'text/javascript';
-    document.getElementsByTagName('head')[0].appendChild(colorPlugin);
-    var encryptPlugin = document.createElement('script');
-    encryptPlugin.src = 'https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js';
-    encryptPlugin.type = 'text/javascript';
-    document.getElementsByTagName('head')[0].appendChild(encryptPlugin);
-    var storagePlugin = document.createElement('script');
-    storagePlugin.src = 'https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js';
-    storagePlugin.type = 'text/javascript';
-    document.getElementsByTagName('head')[0].appendChild(storagePlugin);
-    loaded = true;
+function checkUpdate() {
+    GM_xmlhttpRequest({
+        url: "https://ark-aak.github.io/betterycoj/version",
+        method: "GET",
+        onload: function(xhr){
+            console.log(xhr);
+            let data = xhr.responseText;
+            if (data !== version) {
+                createNotification("检测到新版本！\n请前往 <a href=\"https://ark-aak.github.io/betterycoj/betterycoj.user.js\">Github</a> 更新。", 20000, 1000, 'rgba(82, 196, 26, 0.8)')
+            }
+        }
+    });
 }
 
 function loadMapping() {
@@ -59,6 +61,7 @@ function loadMapping() {
 					if (tag === "普及−") data[i][4] = 2;
                     if (tag === "入门") data[i][4] = 1
 				}
+                minLen = Math.min(minLen, data[i].length);
             }
             solutionMapping = data;
             solutionLoaded = true;
@@ -69,6 +72,8 @@ function loadMapping() {
 unsafeWindow.loadMapping = loadMapping
 
 window.addEventListener('load', function() {
+    checkUpdate();
+	/*
     let intervalId = setInterval(() => {
         if(unsafeWindow.editor && "function" == typeof unsafeWindow.define && unsafeWindow.define.amd) {
             console.log("detected monaco editor.");
@@ -90,7 +95,8 @@ window.addEventListener('load', function() {
             return;
         }
     }, 100);//处理Monaco Editor
-    setTimeout(() => {
+	*/
+    //setTimeout(() => {
 		try {
             problemDb = localforage.createInstance({
                 name: "problem"
@@ -106,7 +112,7 @@ window.addEventListener('load', function() {
 			console.log(e);
 			createNotification("Localforage 未加载，可能是刷新过于频繁。", 3000, 1000, 'rgba(231, 76, 60, 0.8)')
 		}
-    }, 1000);
+    //}, 200);
     //傻逼Monaco
     loadMapping();
 });
@@ -134,7 +140,7 @@ function createNotification(message, displayTime, fadeoutTime, backgroundColor =
     notification.style.padding = '10px';
     notification.style.borderRadius = '5px';
     notification.style.zIndex = '9999';
-    notification.textContent = message;
+    notification.innerHTML = message;
     notification.style.whiteSpace = 'pre-wrap';
 
     setTimeout(() => {
@@ -157,12 +163,12 @@ function redirect(path) {
 
 const username = async () => {
     await searchUser(getCookieUsername());
-    if (getCookie("login") !== "") return getCookie("username");
+    if (getCookie("login") !== "") return getCookie("b-username");
     return "";
 }
 const userId = async () => {
     await searchUser(getCookieUsername());
-    if (getCookie("login") !== "") return getCookie("userId");
+    if (getCookie("login") !== "") return getCookie("b-userId");
     return "";
 }
 const isAdmin = async () => {
@@ -181,8 +187,8 @@ const searchUser = async (username) => {
             }
             let userId = data.results[0].value;
             let username = data.results[0].name;
-            setCookie("userId", userId);
-            setCookie("username", username);
+            setCookie("b-userId", userId);
+            setCookie("b-username", username);
         }
     });
 }
@@ -240,10 +246,10 @@ async function getInfo(name) {
 }
 
 function changeAccount() {
-    var tmp = getCookie("login-1");
-    setCookie("login", getCookie("login-2"));
-    setCookie("login-1", getCookie("login-2"));
-    setCookie("login-2", tmp);
+    var tmp = getCookie("b-login-1");
+    setCookie("login", getCookie("b-login-2"));
+    setCookie("b-login-1", getCookie("b-login-2"));
+    setCookie("b-login-2", tmp);
     setCookie("connect.sid", "");
     let nowAccount = getCookie("login");
     let pattern = /\[\"(.*?)\",\"(.*?)\"\]/;
@@ -519,7 +525,7 @@ if (getCookie("login") !== "") {
     var element = $("<a class=\"item\" href=\"javascript:void(0)\"><i class=\"repeat icon\"></i>切换账号</a>")
     var Telement = $("<a class=\"item\" href=\"javascript:void(0)\"><i class=\"info icon\"></i>Ver " + version + "</a>")
     element.click(() => {
-        if (getCookie("login-2") == "") {
+        if (getCookie("b-login-2") == "") {
             createNotification("切换失败！未找到上次登录记录。", 3000, 1000, 'rgba(231, 76, 60, 0.8)')
             return;
         }
@@ -685,18 +691,20 @@ function showPopupError(content) {
 }
 
 if (window.location.pathname.match(/\/contest\/\d+\/problem\/\d+\/?$/) && window.location.pathname.match(/^\/contest\/\d+\/problem\/\d+\/?/)) {
-    setTimeout(async () => {
+    let piId = setInterval(async () => {
+        if (!solutionLoaded) return;
+        clearInterval(piId);
         if (!$("h1.ui.header")) return;
         const title = $("h1.ui.header")[0].innerText;
         const row = $($($.find("div.ui.grid")[1]).find("div.row")[1]);
         const hash = CryptoJS.SHA256((row.find("p")[0].innerHTML)).toString();
         let text = "<div class=\"row\"><div class=\"column\"><h4 class=\"ui top attached block header\">匹配的题解 <button id=\"copyhash\" class=\"ui labeled mini button\" onclick=\"window.copyContent('" + hash + "')\">复制摘要</button></h4><div class=\"ui bottom attached segment font-content\"><div style=\"position: relative; overflow: hidden; \">"
         let lst;
-        if (solutionMapping.length < 1 || (solutionMapping[0].length < 2)) {
+        if (solutionMapping.length < 1 || (minLen < 2)) {
 			showPopupError("数据库出错或丢失！");
             return;
         }
-        if (solutionMapping[0].length == 2) lst = searchSolutionByTitle(title)
+        if (minLen == 2) lst = searchSolutionByTitle(title)
 		else lst = searchSolutionByHash(hash)
         if (lst) {
             for (let i = 0; i < lst.length; i++) {
@@ -707,7 +715,7 @@ if (window.location.pathname.match(/\/contest\/\d+\/problem\/\d+\/?$/) && window
             text = text + "</div></div> </div> </div>";
             row.before($(text));
         }
-		if (solutionMapping[0].length >= 5) {
+		if (minLen >= 5) {
 			const dif = getDifficulty(hash);
 			const color = colorMap[dif];
 			const tagDiv = $($(".ui.center.aligned.grid").find("div.row")[2]);
@@ -724,7 +732,7 @@ if (window.location.pathname.match(/\/contest\/\d+\/problem\/\d+\/?$/) && window
 			else shitElement = $("<span class=\"ui label\">" + score + "💩</span>")
 			diffElement.before(shitElement);
 		}
-    }, 800);
+    }, 20);
 }
 
 if (window.location.pathname.match(/\/contests\/?$/)) {
@@ -794,9 +802,9 @@ if (window.location.pathname.match(/\/login\/?$/)) {
         $("#login").animate({ backgroundColor: "#52C41A", color: defaultColor }, 300);
         $("#login").text("登录成功");
         $("#login").removeClass("loading");
-        if (getCookie("login") !== getCookie("login-1")) {
-            setCookie("login-2", getCookie("login-1"));
-            setCookie("login-1", getCookie("login"));
+        if (getCookie("login") !== getCookie("b-login-1")) {
+            setCookie("b-login-2", getCookie("b-login-1"));
+            setCookie("b-login-1", getCookie("login"));
         }
         afterLogin(username, password);
         setTimeout(() => {
