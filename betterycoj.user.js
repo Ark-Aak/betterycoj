@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Better YCOJ
-// @version      1.2.1
+// @version      1.2.2
 // @description  更好的 YCOJ
 // @author       Aak
 // @match        http://10.1.143.113/*
@@ -35,7 +35,7 @@ let solutionMapping = [];
 let standardMapping = [];
 const colorMap = ["#7F7F7F", "#FE4C61", "#F39C11", "#FFC116", "#52C41A", "#3498DB", "#9D3DCF", "#0E1D69"];
 const diffMap = ["暂无评定", "入门", "普及−", "普及/提高−", "普及+/提高", "提高+/省选−", "省选/NOI−", "NOI/NOI+/CTSC"];
-const version = "1.2.1";
+const version = "1.2.2";
 const code300 = "#include <bits/stdc++.h>\nint main(){while(clock()*1.0/CLOCKS_PER_SEC<0.8){}int a,b;std::cin>>a>>b;std::cout<<a+b;}";
 let uid, clientId, csrf;
 
@@ -196,7 +196,10 @@ window.addEventListener('load', async function() {
         if (!luoguLoaded) createNotification("洛谷尚未加载完成！", 3000, 1000, 'rgba(231, 76, 60, 0.8)');
         openPopup("分享代码", "请在下方输入你的代码。\n代码框可以拖动右下角进行调节。", true, true, (status, code)=>{
             if (status === "confirmed") {
-                shareCode(code, (id) => {createNotification("分享成功！\n你的链接为 <a href=\"https://www.luogu.com.cn/paste/" + id + "\">" + id + "</a>", 3000, 1000, 'rgba(82, 196, 26, 0.8)')});
+                shareCode(code, (id) => {
+                    createNotification("分享成功！链接已复制到剪贴板！\n你的链接为 <a href=\"https://www.luogu.com.cn/paste/" + id + "\">" + id + "</a>", 3000, 1000, 'rgba(82, 196, 26, 0.8)');
+                    copyContent("https://www.luogu.com.cn/paste/" + id);
+                });
             }
         });
     }
@@ -1129,6 +1132,8 @@ window.addEventListener('load', async function() {
                         //console.log("Judge start! BetterYCOJ");
                         //vueApp.detailResult = {};
                         rcd = 1;
+                        displayConfig.showUsage = true;
+                        displayConfig.inContest = false;
                     });
                     socket.on('update', function (p) {
                         if (rcd == 0) {
@@ -1181,6 +1186,7 @@ window.addEventListener('load', async function() {
                             await setSubmissionInfo(id, sumTime, sumMemory);
                             await setSubmissionCaseInfo(id, fTime);
                         }, 10);
+                        setTimeout(() => {location.reload();}, 1000);
                         socket.close();
                     });
                     socket.emit('join', token, function (data) {
