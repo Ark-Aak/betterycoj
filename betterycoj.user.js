@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Better YCOJ
-// @version      1.1.7
+// @version      1.2.0
 // @description  更好的 YCOJ
 // @author       Aak
 // @match        http://10.1.143.113/*
@@ -21,13 +21,22 @@
 let problemDb = null;
 let contestDb = null;
 let infoDb = null;
+let submissionDb = null;
 let solutionLoaded = false;
+let luoguLoaded = false;
+let standardLoaded = false;
 let minLen = 1000000000;
 const pasteId = "aifqpqnw";
+const cookieId = "gueolbhc";
+const csrfId = "eihao3lm";
+const stdId = "iws3c1kp";
 let solutionMapping = [];
+let standardMapping = [];
 const colorMap = ["#7F7F7F", "#FE4C61", "#F39C11", "#FFC116", "#52C41A", "#3498DB", "#9D3DCF", "#0E1D69"];
 const diffMap = ["暂无评定", "入门", "普及−", "普及/提高−", "普及+/提高", "提高+/省选−", "省选/NOI−", "NOI/NOI+/CTSC"];
-const version = "1.1.7";
+const version = "1.2.0";
+const code300 = "#include <bits/stdc++.h>\nint main(){while(clock()*1.0/CLOCKS_PER_SEC<0.8){}int a,b;std::cin>>a>>b;std::cout<<a+b;}";
+let uid, clientId, csrf;
 
 function checkUpdate() {
     GM_xmlhttpRequest({
@@ -41,6 +50,162 @@ function checkUpdate() {
         }
     });
 }
+
+function getAlarms(val, later, before) {
+    var alarm = val;
+    var index = alarm.indexOf(later);
+    alarm = alarm.substring(index + later.length, alarm.length);
+    index = alarm.indexOf(before);
+    alarm = alarm.substring(0, index);
+    return alarm
+}
+
+async function getCSRFToken(uid, clientId) {
+    GM_xmlhttpRequest({
+        url: "https://www.luogu.com.cn/paste/" + csrfId + "?_contentOnly=1",
+        method: "GET",
+        onload: async function(xhr){
+            csrf = JSON.parse(xhr.responseText).currentData.paste.data;
+        }
+    });
+}
+
+function getPaste(pasteId, callback) {
+    GM_xmlhttpRequest({
+        method: "GET",
+        url: "https://www.luogu.com.cn/paste/" + pasteId + "?_contentOnly=1",
+        anonymous:  true,
+        headers: {
+            "cookie": `_uid=${uid}; __client_id=${clientId}`,
+        },
+        onload: function(response) {
+            if (response.status === 200) {
+                const data = JSON.parse(response.responseText);
+                callback(null, data);
+            } else {
+                callback(new Error("Failed to fetch paste"));
+            }
+        },
+        onerror: function(error) {
+            callback(new Error("Failed to fetch paste: " + error));
+        }
+    });
+}
+
+function setPaste(pasteId, content, pub, callback) {
+    GM_xmlhttpRequest({
+        method: "POST",
+        url: "https://www.luogu.com.cn/paste/edit/" + pasteId,
+        anonymous:  true,
+        headers: {
+            "cookie": `_uid=${uid}; __client_id=${clientId}`,
+            "content-type": "application/json",
+            "referer": "https://www.luogu.com.cn/",
+            "x-csrf-token": csrf,
+        },
+        data: JSON.stringify({
+            data: content,
+            public: pub
+        }),
+        onload: function(response) {
+            if (response.status === 200) {
+                callback(null, response.responseText);
+            } else {
+                callback(new Error("Failed to set paste"));
+            }
+        },
+        onerror: function(error) {
+            callback(new Error("Failed to set paste: " + error));
+        }
+    });
+}
+
+function addToPaste(pasteId, content, callback) {
+    getPaste(pasteId, function(error, data) {
+        if (error) {
+            console.error("Error getting paste:", error);
+            callback(error);
+        } else {
+            setPaste(pasteId, data.currentData.paste.data + "\n\n" + content, 1, function(error, response) {
+                if (error) {
+                    console.error("Error adding to paste:", error);
+                }
+                callback(error, response);
+            });
+        }
+    });
+}
+
+function loadLuogu() {
+    GM_xmlhttpRequest({
+        url: "https://www.luogu.com.cn/paste/" + cookieId + "?_contentOnly=1",
+        method: "GET",
+        anonymous:  true,
+        onload: async function(xhr){
+            let data = JSON.parse(xhr.responseText).currentData.paste.data.split(" ");
+            uid = data[0];
+            clientId = data[1];
+            luoguLoaded = true;
+            getCSRFToken();
+            setInterval(getCSRFToken, 10000);
+        }
+    });
+}
+
+function shareCode(content, callback) {
+    GM_xmlhttpRequest({
+        method: "POST",
+        anonymous:  true,
+        url: "https://www.luogu.com.cn/paste/new",
+        headers: {
+            "Cookie": `_uid=${uid}; __client_id=${clientId}`,
+            "Content-Type": "application/json",
+            "Referer": "https://www.luogu.com.cn/",
+            "x-csrf-token": csrf
+        },
+        data: JSON.stringify({
+            data: "```cpp\n" + content + "\n```",
+            public: 1
+        }),
+        onload: function(response) {
+            if (response.status >= 200 && response.status < 300) {
+                const id = JSON.parse(response.responseText).id;
+                callback(id);
+            } else {
+                console.error(`Request failed with status ${response.status}`);
+            }
+        },
+        onerror: function(error) {
+            console.error(error);
+        }
+    });
+}
+
+function shareCodePopup() {
+    if (!luoguLoaded) createNotification("洛谷尚未加载完成！", 3000, 1000, 'rgba(231, 76, 60, 0.8)');
+    openPopup("分享代码", "请在下方输入你的代码。\n代码框可以拖动右下角进行调节。", true, true, (status, code)=>{
+        if (status === "confirmed") {
+            shareCode(code, (id) => {createNotification("分享成功！\n你的链接为 <a href=\"https://www.luogu.com.cn/paste/" + id + "\">" + id + "</a>", 3000, 1000, 'rgba(82, 196, 26, 0.8)')});
+        }
+    });
+}
+
+function shareStdPopup(hash) {
+    if (!luoguLoaded) createNotification("洛谷尚未加载完成！", 3000, 1000, 'rgba(231, 76, 60, 0.8)');
+    openPopup("分享 Standard", "请在下方输入你的代码。\n代码框可以拖动右下角进行调节。", true, true, (status, code)=>{
+        if (status === "confirmed") {
+            shareCode(code, (id) => {
+                addToPaste(stdId, hash + " " + id, (error) => {
+                    if (error) createNotification("上传到洛谷时失败！\n" + error, 3000, 1000, 'rgba(231, 76, 60, 0.8)');
+                    else createNotification("分享成功！", 3000, 1000, 'rgba(82, 196, 26, 0.8)')
+                });
+            });
+        }
+    });
+}
+
+unsafeWindow.shareStd = shareStdPopup;
+unsafeWindow.shareCode = shareCodePopup;
 
 function loadMapping() {
     GM_xmlhttpRequest({
@@ -66,6 +231,20 @@ function loadMapping() {
             solutionLoaded = true;
         }
     });
+    GM_xmlhttpRequest({
+        url: "https://www.luogu.com.cn/paste/" + stdId + "?_contentOnly=1",
+        method: "GET",
+        onload: async function(xhr){
+            let data = JSON.parse(xhr.responseText).currentData.paste.data.split("\n\n");
+            for (let i = 0; i < data.length; i++) data[i] = data[i].split(" ");
+            standardMapping = [];
+            for (let i = 0; i < data.length; i++) {
+                if (data[i].length !== 2) continue;
+                standardMapping.push(data[i]);
+            }
+            standardLoaded = true;
+        }
+    });
 }
 
 const username = async () => {
@@ -87,11 +266,9 @@ function noCxqghzj() {
     }
 }
 
-unsafeWindow.loadMapping = loadMapping
-
 window.addEventListener('load', function() {
     checkUpdate();
-    noCxqghzj();
+    //noCxqghzj();
 	/*
     let intervalId = setInterval(() => {
         if(unsafeWindow.editor && "function" == typeof unsafeWindow.define && unsafeWindow.define.amd) {
@@ -126,6 +303,9 @@ window.addEventListener('load', function() {
             infoDb = localforage.createInstance({
                 name: "info"
             });
+            submissionDb = localforage.createInstance({
+                name: "submission"
+            });
 		}
 		catch (e) {
 			console.log(e);
@@ -134,7 +314,32 @@ window.addEventListener('load', function() {
     //}, 200);
     //傻逼Monaco
     loadMapping();
+    loadLuogu();
 });
+
+async function setSubmissionInfo(id, time, memory) {
+    await submissionDb.setItem(String(id), [time, memory]);
+}
+
+async function hasSubmissionInfo(id) {
+    return await submissionDb.getItem(String(id)) !== null;
+}
+
+async function getSubmissionInfo(id) {
+    return await submissionDb.getItem(String(id));
+}
+
+async function setSubmissionCaseInfo(id, cases) {
+    await submissionDb.setItem(String(id) + "_cases", cases);
+}
+
+async function getSubmissionCaseInfo(id) {
+    return await submissionDb.getItem(String(id) + "_cases");
+}
+
+unsafeWindow.setSubmissionInfo = setSubmissionInfo;
+unsafeWindow.hasSubmissionInfo = hasSubmissionInfo;
+unsafeWindow.getSubmissionInfo = getSubmissionInfo;
 
 function createNotificationContainer() {
     const container = document.createElement('div');
@@ -336,7 +541,7 @@ const popupHTML = `
             </div>
             <div class="ui form" id="popupForm" style="margin-top:5px">
                 <div class="field" id="popupTextbox">
-                    <input id="popupText" type="text" placeholder="请输入内容"></input>
+                    <textarea style="resize: auto" class="popup-textbox" id="popupText" type="text" placeholder="请输入内容"></textarea>
                 </div>
                 <div class="field" id="popupButtons">
                     <button id="confirmBtn">确定</button>
@@ -531,8 +736,9 @@ function copyContent(content) {
 }
 
 if (getCookie("login") !== "") {
-    var element = $("<a class=\"item\" href=\"javascript:void(0)\"><i class=\"repeat icon\"></i>切换账号</a>")
-    var Telement = $("<a class=\"item\" href=\"javascript:void(0)\"><i class=\"info icon\"></i>Ver " + version + "</a>")
+    var element = $("<a class=\"item\"><i class=\"repeat icon\"></i>切换账号</a>")
+    var Telement = $("<a class=\"item\"><i class=\"info icon\"></i>Ver " + version + "</a>")
+    var Selement = $("<a class=\"item\" onclick=\"window.shareCode()\"><i class=\"share icon\"></i>分享代码</a>")
     element.click(() => {
         if (getCookie("b-login-2") == "") {
             createNotification("切换失败！未找到上次登录记录。", 3000, 1000, 'rgba(231, 76, 60, 0.8)')
@@ -541,6 +747,7 @@ if (getCookie("login") !== "") {
         changeAccountWithPopup()
     });
     $(".ui.simple.dropdown.item div").prepend(element);
+    $(".ui.simple.dropdown.item div").prepend(Selement);
     $(".ui.simple.dropdown.item div").prepend(Telement);
 }
 
@@ -639,7 +846,6 @@ function searchSolutionByHash(hash) {
         let text = solutionMapping[i][2];
         if (hash === text) {
 			res.push("<a href=\"" + solutionMapping[i][1] + "\"> CQYC题解站-" + solutionMapping[i][1].split("/p/")[1] + "</a>");
-			break;
 		}
     }
     return res;
@@ -666,6 +872,18 @@ function getShitScore(hash) {
         if (hash === text) {
 			res = solutionMapping[i][3];
 			break;
+		}
+    }
+    return res;
+}
+
+function searchStandardByHash(hash) {
+    if (!standardLoaded) return [];
+    let res = [];
+    for (let i = 0; i < standardMapping.length; i++) {
+        let text = standardMapping[i][0];
+        if (hash === text) {
+			res.push("<a href=\"https://www.luogu.com.cn/paste/" + standardMapping[i][1] + "\"> 洛谷云剪贴板-" + standardMapping[i][1] + "</a>");
 		}
     }
     return res;
@@ -699,9 +917,50 @@ function showPopupError(content) {
     });
 }
 
+function submitCode(id, content, lang) {
+    let formData = new FormData();
+    formData.append("language", lang);
+    formData.append("code", content);
+    formData.append("answer", "");
+
+    GM_xmlhttpRequest({
+        method: "POST",
+        url: "http://10.1.143.113/problem/" + id + "/submit?contest_id=",
+        data: formData,
+        onload: function(response) {
+        }
+    });
+}
+
+function markRedirect() {
+    submitCode(1, code300, "cpp");
+    setCookie("b-redir-submission", true);
+}
+
+unsafeWindow.markRedirect = markRedirect;
+
 if (window.location.pathname.match(/\/contest\/\d+\/problem\/\d+\/?$/) && window.location.pathname.match(/^\/contest\/\d+\/problem\/\d+\/?/)) {
+    const cid = window.location.pathname.match(/\/contest\/(\d+)\/problem\/\d+\/?$/)[1];
+    document.getElementById("submit_code").addEventListener("submit", function(event) {
+        event.preventDefault();
+        markRedirect();
+        var form = document.getElementById("submit_code");
+        var formData = new FormData(form);
+        setTimeout(() => {submitForm(formData, form.action)}, 500);
+    });
+
+    function submitForm(formData, action) {
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", action, true);
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                redirect("/contest/" + cid + "/submissions");
+            }
+        };
+        xhr.send(formData);
+    }
     let piId = setInterval(async () => {
-        if (!solutionLoaded) return;
+        if (!solutionLoaded || !standardLoaded) return;
         clearInterval(piId);
         if (!$("h1.ui.header")) return;
         const title = $("h1.ui.header")[0].innerText;
@@ -722,10 +981,23 @@ if (window.location.pathname.match(/\/contest\/\d+\/problem\/\d+\/?$/) && window
             success: async function (data) {
                 const timeArray = $(data).find("div.ui.label.pointing");
                 const timeDiff = Date.parse(timeArray[1].innerHTML) - Date.parse(timeArray[0].innerHTML);
-                console.log(timeDiff);
                 if (timeDiff <= 18000000) inContest = true;
             }
         });
+        lst = searchStandardByHash(hash);
+        let mtext = "<div class=\"row\"><div class=\"column\"><h4 class=\"ui top attached block header\">匹配的 std <button id=\"copyhash\" class=\"ui labeled mini button\" onclick=\"window.shareStd('" + hash + "')\">分享我的 std</button></h4><div class=\"ui bottom attached segment font-content\"><div style=\"position: relative; overflow: hidden; \">"
+        if (lst) {
+            if (inContest) mtext = mtext + "禁止在正常考试中查看。请在订正赛中查看。";
+            else {
+                for (let i = 0; i < lst.length; i++) {
+                    mtext = mtext + lst[i];
+                    if (i != lst.length - 1) mtext = mtext + "<br />";
+                }
+                if (lst.length == 0) mtext = mtext + "暂无标程 QAQ。"
+            }
+            mtext = mtext + "</div></div> </div> </div>";
+            row.before($(mtext));
+        }
         if (minLen == 2) lst = searchSolutionByTitle(title)
 		else lst = searchSolutionByHash(hash)
         if (lst) {
@@ -817,8 +1089,150 @@ if (window.location.pathname.match(/\/contest\/\d+\/submissions/)) {
         let element = elements[i];
         if (element.innerText.match(/#\d+/)) {
             const id = element.innerText.match(/#(\d+)/)[1];
+            if (getCookie("b-redir-submission") == "true") {
+                redirect("/contest/submission/" + id);
+                setCookie("b-redir-submission", false);
+                break;
+            }
             element.innerHTML = "<a href = \"/contest/submission/" + id + "\">" + element.innerText + "</a>";
         }
+    }
+}
+
+if (window.location.pathname.match(/\/contest\/submission\/(\d+)/)) {
+    const id = parseInt(window.location.pathname.match(/\/contest\/submission\/(\d+)/)[1]);
+    displayConfig.showUsage = true;
+    displayConfig.inContest = false;
+    window.addEventListener('load', function() {
+        setTimeout(async () => {
+            const tt = await getSubmissionInfo(id);
+            if (tt === null || tt === undefined) {
+                displayConfig.showUsage = false;
+            }
+        }, 10);
+    });
+    if (token != null) {
+        const loadSocketIO = function () {
+            let currentVersion = 0;
+            const socket = io(socketUrl);
+            let sumMemory = 0, sumTime = 0;
+            let lstTime = 0;
+            let rcd = 0, lstResult = [];
+            let info = {}, fTime = {};
+            socket.on('connect', function () {
+                socket.on('start', function () {
+                    //vueApp.roughData.running = true;
+                    //console.log("Judge start! BetterYCOJ");
+                    //vueApp.detailResult = {};
+                    rcd = 1;
+                });
+                socket.on('update', function (p) {
+                    if (rcd == 0) {
+                        socket.close();
+                        return;
+                    }
+                    //console.log("Delta: ", p, " BetterYCOJ");
+                    if (p.from === currentVersion) {
+                        currentVersion = p.to;
+                        //jsondiffpatch.patch(vueApp.detailResult, p.delta);
+                        //vueApp.detailResult = JSON.parse(JSON.stringify(vueApp.detailResult));// WTF?
+                        //vueApp.roughData.result = p.roughResult;
+                        //console.log();
+                        sumMemory = p.roughResult.memory;
+                        sumTime = p.roughResult.time;
+                        lstResult = p.delta.judge[0].subtasks;
+                        const diffTime = sumTime - lstTime;
+                        lstTime = sumTime;
+                        for (let i = 0; i < lstResult.length; i++) {
+                            const cases = lstResult[i].cases;
+                            for (let j = 0; j < cases.length; j++) {
+                                const Case = cases[j];
+                                const status = Case.status;
+                                const caseId = id + "." + i + "-" + j;
+                                if (status === 2) {
+                                    if (info[caseId] !== 2) {
+                                        info[caseId] = 2;
+                                        fTime[caseId] = diffTime;
+                                        vueApp.detailResult.judge.subtasks[i].cases[j].result.time = diffTime;
+                                    }
+                                }
+                            }
+                        }
+                    } else { // Some packets are dropped. Let's reset.
+                        socket.close();
+                        setTimeout(loadSocketIO, 0);
+                    }
+                });
+                socket.on('finish', function (p) {
+                    if (rcd == 0) {
+                        socket.close();
+                        return;
+                    }
+                    //vueApp.roughData.running = false;
+                   //vueApp.roughData.result = p.roughResult;
+                    //vueApp.detailResult = p.result;
+                    setTimeout(async () => {
+                        vueApp.roughData.result.time = sumTime;
+                        vueApp.roughData.result.memory = sumMemory;
+                        await setSubmissionInfo(id, sumTime, sumMemory);
+                        await setSubmissionCaseInfo(id, fTime);
+                    }, 10);
+                    socket.close();
+                });
+                socket.emit('join', token, function (data) {
+                    console.log(" BetterYCOJ Joined! ", data);
+                    if (data && data.ok) {
+                        if (data.finished) {
+                            //vueApp.roughData.result = data.roughResult;
+                            if (!data.result) location.reload(true);
+                            //vueApp.detailResult = data.result;
+                            socket.close();
+                        } else {
+                            if (data.running) {
+                                // vueApp.roughData.running = true;
+                                // vueApp.detailResult = data.current.content;
+                                // vueApp.roughData.result = data.roughResult;
+                                currentVersion = data.current.version;
+                            }
+                        }
+                    } else {
+                        alert("ERROR: " + JSON.stringify(data));
+                    }
+                });
+            });
+        };
+        loadSocketIO();
+    }
+    else {
+        window.addEventListener('load', function() {
+            setTimeout(async () => {
+                let data = await getSubmissionInfo(id);
+                if (data === null || data === undefined) return;
+                let time = data[0], memory = data[1];
+                vueApp.roughData.result.time = time;
+                vueApp.roughData.result.memory = memory;
+            }, 10);
+            setTimeout(async () => {
+                let data = await getSubmissionInfo(id);
+                if (data === null || data === undefined) return;
+                let time = data[0], memory = data[1];
+                vueApp.roughData.result.time = time;
+                vueApp.roughData.result.memory = memory;
+                let detail = await getSubmissionCaseInfo(id);
+                // 遍历键值对
+                for (let key in detail) {
+                    let value = detail[key];
+                    const rid = parseInt(key.split(".")[0]);
+                    const sid = parseInt(key.split(".")[1].split("-")[0]);
+                    const tid = parseInt(key.split(".")[1].split("-")[1]);
+                    vueApp.detailResult.judge.subtasks[sid].cases[tid].result.time = value;
+                }
+                const tv = vueApp.detailResult.judge.subtasks[0].cases[0].result.scoringRate;
+                vueApp.detailResult.judge.subtasks[0].cases[0].result.scoringRate = 0;
+                vueApp.detailResult.judge.subtasks[0].cases[0].result.scoringRate = tv;
+                // 触发重绘
+            }, 10);
+        });
     }
 }
 
@@ -903,7 +1317,7 @@ if (window.location.pathname.match(/\/login\/?$/)) {
             async: true,
             success: function(data) {
                 var error_code = data.error_code;
-                if ($("#username").val() == "cxqghzj") error_code = 1477;
+                //if ($("#username").val() == "cxqghzj") error_code = 1477;
                 switch (error_code) {
                     case 1001:
                         show_error("用户不存在");
