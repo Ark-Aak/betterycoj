@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Better YCOJ
-// @version      1.2.2
+// @version      1.2.3
 // @description  更好的 YCOJ
 // @author       Aak
 // @match        http://10.1.143.113/*
@@ -10,6 +10,7 @@
 // @grant        unsafeWindow
 // @grant        GM_xmlhttpRequest
 // @connect      luogu.com.cn
+// @connect      luogu.com
 // @connect      ark-aak.github.io
 // @license      MIT
 // @require    https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js
@@ -35,7 +36,7 @@ let solutionMapping = [];
 let standardMapping = [];
 const colorMap = ["#7F7F7F", "#FE4C61", "#F39C11", "#FFC116", "#52C41A", "#3498DB", "#9D3DCF", "#0E1D69"];
 const diffMap = ["暂无评定", "入门", "普及−", "普及/提高−", "普及+/提高", "提高+/省选−", "省选/NOI−", "NOI/NOI+/CTSC"];
-const version = "1.2.2";
+const version = "1.2.3";
 const code300 = "#include <bits/stdc++.h>\nint main(){while(clock()*1.0/CLOCKS_PER_SEC<0.8){}int a,b;std::cin>>a>>b;std::cout<<a+b;}";
 let uid, clientId, csrf;
 
@@ -48,7 +49,28 @@ window.addEventListener('DOMContentLoaded', function() {
 });
 
 window.addEventListener('load', async function() {
-
+    /*
+    const ws = new WebSocket("wss://ws.luogu.com.cn/ws");
+    ws.onopen = () => {
+        ws.send(JSON.stringify({
+            channel: "chat",
+            channel_param: `381949`,
+            type: "join_channel",
+        }));
+    };
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        switch (data._ws_type) {
+            case "server_broadcast": {
+                const { message } = data;
+                console.log(
+                    `${message.sender.name} → ${message.receiver.name}: ${message.content}`,
+                );
+                break;
+            }
+        }
+    };
+    */
     function checkUpdate() {
         GM_xmlhttpRequest({
             url: "https://ark-aak.github.io/betterycoj/version",
@@ -73,7 +95,7 @@ window.addEventListener('load', async function() {
 
     async function getCSRFToken(uid, clientId) {
         GM_xmlhttpRequest({
-            url: "https://www.luogu.com.cn/paste/" + csrfId + "?_contentOnly=1",
+            url: "https://www.luogu.com/paste/" + csrfId + "?_contentOnly=1",
             method: "GET",
             onload: async function(xhr){
                 csrf = JSON.parse(xhr.responseText).currentData.paste.data;
@@ -84,7 +106,7 @@ window.addEventListener('load', async function() {
     function getPaste(pasteId, callback) {
         GM_xmlhttpRequest({
             method: "GET",
-            url: "https://www.luogu.com.cn/paste/" + pasteId + "?_contentOnly=1",
+            url: "https://www.luogu.com/paste/" + pasteId + "?_contentOnly=1",
             anonymous:  true,
             headers: {
                 "cookie": `_uid=${uid}; __client_id=${clientId}`,
@@ -106,12 +128,12 @@ window.addEventListener('load', async function() {
     function setPaste(pasteId, content, pub, callback) {
         GM_xmlhttpRequest({
             method: "POST",
-            url: "https://www.luogu.com.cn/paste/edit/" + pasteId,
+            url: "https://www.luogu.com/paste/edit/" + pasteId,
             anonymous:  true,
             headers: {
                 "cookie": `_uid=${uid}; __client_id=${clientId}`,
                 "content-type": "application/json",
-                "referer": "https://www.luogu.com.cn/",
+                "referer": "https://www.luogu.com/",
                 "x-csrf-token": csrf,
             },
             data: JSON.stringify({
@@ -149,7 +171,7 @@ window.addEventListener('load', async function() {
 
     function loadLuogu() {
         GM_xmlhttpRequest({
-            url: "https://www.luogu.com.cn/paste/" + cookieId + "?_contentOnly=1",
+            url: "https://www.luogu.com/paste/" + cookieId + "?_contentOnly=1",
             method: "GET",
             anonymous:  true,
             onload: async function(xhr){
@@ -167,11 +189,11 @@ window.addEventListener('load', async function() {
         GM_xmlhttpRequest({
             method: "POST",
             anonymous:  true,
-            url: "https://www.luogu.com.cn/paste/new",
+            url: "https://www.luogu.com/paste/new",
             headers: {
                 "Cookie": `_uid=${uid}; __client_id=${clientId}`,
                 "Content-Type": "application/json",
-                "Referer": "https://www.luogu.com.cn/",
+                "Referer": "https://www.luogu.com/",
                 "x-csrf-token": csrf
             },
             data: JSON.stringify({
@@ -197,8 +219,8 @@ window.addEventListener('load', async function() {
         openPopup("分享代码", "请在下方输入你的代码。\n代码框可以拖动右下角进行调节。", true, true, (status, code)=>{
             if (status === "confirmed") {
                 shareCode(code, (id) => {
-                    createNotification("分享成功！链接已复制到剪贴板！\n你的链接为 <a href=\"https://www.luogu.com.cn/paste/" + id + "\">" + id + "</a>", 3000, 1000, 'rgba(82, 196, 26, 0.8)');
-                    copyContent("https://www.luogu.com.cn/paste/" + id);
+                    createNotification("分享成功！链接已复制到剪贴板！\n你的链接为 <a href=\"https://www.luogu.com/paste/" + id + "\">" + id + "</a>", 3000, 1000, 'rgba(82, 196, 26, 0.8)');
+                    copyContent("https://www.luogu.com/paste/" + id);
                 });
             }
         });
@@ -223,7 +245,7 @@ window.addEventListener('load', async function() {
 
     function loadMapping() {
         GM_xmlhttpRequest({
-            url: "https://www.luogu.com.cn/paste/" + pasteId + "?_contentOnly=1",
+            url: "https://www.luogu.com/paste/" + pasteId + "?_contentOnly=1",
             method: "GET",
             onload: async function(xhr){
                 let data = JSON.parse(xhr.responseText).currentData.paste.data.split("\n\n");
@@ -246,7 +268,7 @@ window.addEventListener('load', async function() {
             }
         });
         GM_xmlhttpRequest({
-            url: "https://www.luogu.com.cn/paste/" + stdId + "?_contentOnly=1",
+            url: "https://www.luogu.com/paste/" + stdId + "?_contentOnly=1",
             method: "GET",
             onload: async function(xhr){
                 let data = JSON.parse(xhr.responseText).currentData.paste.data.split("\n\n");
@@ -892,7 +914,7 @@ window.addEventListener('load', async function() {
         for (let i = 0; i < standardMapping.length; i++) {
             let text = standardMapping[i][0];
             if (hash === text) {
-                res.push("<a href=\"https://www.luogu.com.cn/paste/" + standardMapping[i][1] + "\"> 洛谷云剪贴板-" + standardMapping[i][1] + "</a>");
+                res.push("<a href=\"https://www.luogu.com/paste/" + standardMapping[i][1] + "\"> 洛谷云剪贴板-" + standardMapping[i][1] + "</a>");
             }
         }
         return res;
@@ -950,13 +972,15 @@ window.addEventListener('load', async function() {
 
     if (window.location.pathname.match(/\/contest\/\d+\/problem\/\d+\/?$/) && window.location.pathname.match(/^\/contest\/\d+\/problem\/\d+\/?/)) {
         const cid = window.location.pathname.match(/\/contest\/(\d+)\/problem\/\d+\/?$/)[1];
-        document.getElementById("submit_code").addEventListener("submit", function(event) {
-            event.preventDefault();
-            markRedirect();
-            var form = document.getElementById("submit_code");
-            var formData = new FormData(form);
-            setTimeout(() => {submitForm(formData, form.action)}, 500);
-        });
+        if (document.getElementById("submit_code")) {
+            document.getElementById("submit_code").addEventListener("submit", function(event) {
+                event.preventDefault();
+                markRedirect();
+                var form = document.getElementById("submit_code");
+                var formData = new FormData(form);
+                setTimeout(() => {submitForm(formData, form.action)}, 500);
+            });
+        }
 
         function submitForm(formData, action) {
             var xhr = new XMLHttpRequest();
@@ -1162,7 +1186,6 @@ window.addEventListener('load', async function() {
                                         if (info[caseId] !== 2) {
                                             info[caseId] = 2;
                                             fTime[caseId] = diffTime;
-                                            vueApp.detailResult.judge.subtasks[i].cases[j].result.time = diffTime;
                                         }
                                     }
                                 }
