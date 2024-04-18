@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Better YCOJ
-// @version      1.2.3
+// @version      1.2.4
 // @description  更好的 YCOJ
 // @author       Aak
 // @match        http://10.1.143.113/*
@@ -34,9 +34,9 @@ const csrfId = "eihao3lm";
 const stdId = "iws3c1kp";
 let solutionMapping = [];
 let standardMapping = [];
-const colorMap = ["#7F7F7F", "#FE4C61", "#F39C11", "#FFC116", "#52C41A", "#3498DB", "#9D3DCF", "#0E1D69"];
-const diffMap = ["暂无评定", "入门", "普及−", "普及/提高−", "普及+/提高", "提高+/省选−", "省选/NOI−", "NOI/NOI+/CTSC"];
-const version = "1.2.3";
+const colorMap = ["#7F7F7F", "#FE4C61", "#F39C11", "#FFC116", "#52C41A", "#3498DB", "#9D3DCF", "#0E1D69", "#000000"];
+const diffMap = ["暂无评定", "入门", "普及−", "普及/提高−", "普及+/提高", "提高+/省选−", "省选/NOI−", "NOI/NOI+/CTSC", "NOI++/CTSC+"];
+const version = "1.2.4";
 const code300 = "#include <bits/stdc++.h>\nint main(){while(clock()*1.0/CLOCKS_PER_SEC<0.8){}int a,b;std::cin>>a>>b;std::cout<<a+b;}";
 let uid, clientId, csrf;
 
@@ -253,6 +253,7 @@ window.addEventListener('load', async function() {
                 for (let i = 0; i < data.length; i++) {
                     if (data[i].length >= 5) {
                         let tag = data[i][4];
+                        if (tag === "NOI++/CTSC+") data[i][4] = 8;
                         if (tag === "NOI/NOI+/CTSC") data[i][4] = 7;
                         if (tag === "省选/NOI−") data[i][4] = 6;
                         if (tag === "提高+/省选−") data[i][4] = 5;
