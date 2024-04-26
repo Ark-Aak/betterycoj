@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Better YCOJ
-// @version      1.2.4
+// @version      1.2.5
 // @description  更好的 YCOJ
 // @author       Aak
 // @match        http://10.1.143.113/*
@@ -32,13 +32,15 @@ const pasteId = "aifqpqnw";
 const cookieId = "gueolbhc";
 const csrfId = "eihao3lm";
 const stdId = "iws3c1kp";
+const conId = "k8f5x4jb";
 let solutionMapping = [];
 let standardMapping = [];
+let contacts = [];
 const colorMap = ["#7F7F7F", "#FE4C61", "#F39C11", "#FFC116", "#52C41A", "#3498DB", "#9D3DCF", "#0E1D69", "#000000"];
 const diffMap = ["暂无评定", "入门", "普及−", "普及/提高−", "普及+/提高", "提高+/省选−", "省选/NOI−", "NOI/NOI+/CTSC", "<font color=\"red\">NOI++/CTSC+</font>"];
-const version = "1.2.4";
-const code300 = "#include <bits/stdc++.h>\nint main(){while(clock()*1.0/CLOCKS_PER_SEC<0.8){}int a,b;std::cin>>a>>b;std::cout<<a+b;}";
-let uid, clientId, csrf;
+const version = "1.2.5";
+const code300 = "#include<bits/stdc++.h>\nint main(){while(clock()*1.0/CLOCKS_PER_SEC<0.8){}int a,b;std::cin>>a>>b;std::cout<<a+b;}";
+let uid, clientId, csrf, myCsrf;
 
 window.addEventListener('DOMContentLoaded', function() {
     // 获取所有图片元素
@@ -48,29 +50,41 @@ window.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+let ws = null;
+
 window.addEventListener('load', async function() {
-    /*
-    const ws = new WebSocket("wss://ws.luogu.com.cn/ws");
-    ws.onopen = () => {
-        ws.send(JSON.stringify({
-            channel: "chat",
-            channel_param: `381949`,
-            type: "join_channel",
-        }));
-    };
-    ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        switch (data._ws_type) {
-            case "server_broadcast": {
-                const { message } = data;
-                console.log(
-                    `${message.sender.name} → ${message.receiver.name}: ${message.content}`,
-                );
-                break;
+    async function loadSocket() {
+        const _uid = await getInfo("luogu-uid");
+        if (!_uid) return;
+        ws = new WebSocket("wss://ws.luogu.com.cn/ws");
+        ws.onopen = () => {
+            ws.send(JSON.stringify({
+                channel: "chat",
+                channel_param: `${_uid}`,
+                type: "join_channel",
+            }));
+        };
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            switch (data._ws_type) {
+                case "server_broadcast": {
+                    const { message } = data;
+                    const time = new Date(message.time * 1000).toLocaleString();
+                    if (message.sender.uid == uid) {
+                        const content = JSON.parse(message.content);
+                        if (content.type === "transfer") {
+                            if (!content.sender || !content.content) return;
+                            createNotification(time + `\n来自` + content.sender + `：\n${content.content}`, 0, 1000, 'rgba(0, 0, 0, 0.8)');
+                        }
+                    }
+                    if (message.sender.uid == uid || message.receiver.uid == uid) {
+                        deleteRecord(message.id);
+                    }
+                    break;
+                }
             }
-        }
-    };
-    */
+        };
+    }
     function checkUpdate() {
         GM_xmlhttpRequest({
             url: "https://ark-aak.github.io/betterycoj/version",
@@ -91,6 +105,37 @@ window.addEventListener('load', async function() {
         index = alarm.indexOf(before);
         alarm = alarm.substring(0, index);
         return alarm
+    }
+
+    function getMyCSRFToken() {
+        const targetUrl = 'https://www.luogu.com.cn/';
+
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: targetUrl,
+            onload: function(response) {
+                var responseBody = response.responseText;
+                var matches = responseBody.match(/C3VK=([a-zA-Z0-9]+);/);
+                if (matches && matches.length > 1) {
+                    var c3vkCookie = matches[1];
+                    GM_xmlhttpRequest({
+                        method: 'GET',
+                        url: targetUrl,
+                        headers: {
+                            'Cookie': 'C3VK=' + c3vkCookie
+                        },
+                        onload: function(response) {
+                            myCsrf = getAlarms(response.responseText, "<meta name=\"csrf-token\" content=\"", "\">");
+                        }
+                    });
+                } else {
+                    myCsrf = getAlarms(responseBody, "<meta name=\"csrf-token\" content=\"", "\">");
+                }
+            },
+            onerror: function(error) {
+                console.error('Error occurred during request:', error);
+            }
+        });
     }
 
     async function getCSRFToken(uid, clientId) {
@@ -153,6 +198,48 @@ window.addEventListener('load', async function() {
         });
     }
 
+    function sendToServer(content) {
+        GM_xmlhttpRequest({
+            method: "POST",
+            url: "https://www.luogu.com.cn/api/chat/new",
+            headers: {
+                "Content-Type": "application/json",
+                "Referer": "https://www.luogu.com.cn/",
+                "x-csrf-token": myCsrf
+            },
+            data: JSON.stringify({
+                user: uid,
+                content: content,
+            })
+        });
+    }
+
+    function deleteRecord(id) {
+        GM_xmlhttpRequest({
+            method: "POST",
+            url: "https://www.luogu.com.cn/api/chat/delete",
+            headers: {
+                "Content-Type": "application/json",
+                "Referer": "https://www.luogu.com.cn/",
+                "x-csrf-token": myCsrf
+            },
+            data: JSON.stringify({ id: id })
+        });
+    }
+
+    async function requestTransfer(uid, content) {
+        console.log(uid, content);
+        const data = {
+            type: "transfer",
+            content: content,
+            transfer_id: uid,
+            sender: await username()
+        };
+        sendToServer(JSON.stringify(data));
+    }
+
+    unsafeWindow.requestTransfer = requestTransfer;
+
     function addToPaste(pasteId, content, callback) {
         getPaste(pasteId, function(error, data) {
             if (error) {
@@ -181,6 +268,17 @@ window.addEventListener('load', async function() {
                 luoguLoaded = true;
                 getCSRFToken();
                 setInterval(getCSRFToken, 10000);
+                getMyCSRFToken();
+                setInterval(getMyCSRFToken, 10000);
+                loadSocket();
+            }
+        });
+        GM_xmlhttpRequest({
+            url: "https://www.luogu.com/paste/" + conId + "?_contentOnly=1",
+            method: "GET",
+            anonymous:  true,
+            onload: async function(xhr){
+                contacts = JSON.parse(JSON.parse(xhr.responseText).currentData.paste.data);
             }
         });
     }
@@ -216,7 +314,7 @@ window.addEventListener('load', async function() {
 
     function shareCodePopup() {
         if (!luoguLoaded) createNotification("洛谷尚未加载完成！", 3000, 1000, 'rgba(231, 76, 60, 0.8)');
-        openPopup("分享代码", "请在下方输入你的代码。\n代码框可以拖动右下角进行调节。", true, true, (status, code)=>{
+        openPopup("分享代码", "请在下方输入你的代码。\n代码框可以拖动右下角进行调节。", true, true, false, [], (status, code, xxx)=>{
             if (status === "confirmed") {
                 shareCode(code, (id) => {
                     createNotification("分享成功！链接已复制到剪贴板！\n你的链接为 <a href=\"https://www.luogu.com/paste/" + id + "\">" + id + "</a>", 3000, 1000, 'rgba(82, 196, 26, 0.8)');
@@ -228,7 +326,7 @@ window.addEventListener('load', async function() {
 
     function shareStdPopup(hash) {
         if (!luoguLoaded) createNotification("洛谷尚未加载完成！", 3000, 1000, 'rgba(231, 76, 60, 0.8)');
-        openPopup("分享 Standard", "请在下方输入你的代码。\n代码框可以拖动右下角进行调节。", true, true, (status, code)=>{
+        openPopup("分享 Standard", "请在下方输入你的代码。\n代码框可以拖动右下角进行调节。", true, true, false, [], (status, code, xxx)=>{
             if (status === "confirmed") {
                 shareCode(code, (id) => {
                     addToPaste(stdId, hash + " " + id, (error) => {
@@ -240,8 +338,32 @@ window.addEventListener('load', async function() {
         });
     }
 
+    function changeLuoguBind() {
+        openPopup("绑定洛谷账号", "请在下方输入你目前登录的洛谷 uid。", true, true, false, [], (status, content, xxx) => {
+            if (status === "confirmed") {
+                const uid = content;
+                setInfo("luogu-uid", uid);
+                createNotification("修改成功！即将刷新。", 0, 1000, 'rgba(82, 196, 26, 0.8)');
+                setTimeout(() => {
+                    location.reload();
+                }, 2000)
+            }
+        });
+    }
+
+    function sendToUser() {
+        openPopup("发送消息", "请在选择对方的 uid 并输入消息内容。\n最大支持 200 字符 / 100 汉字。", true, true, true, contacts, (status, content, dropdown) => {
+            if (status === "confirmed") {
+                requestTransfer(dropdown, content);
+                createNotification("发送成功！", 3000, 1000, 'rgba(82, 196, 26, 0.8)');
+            }
+        });
+    }
+
+    unsafeWindow.changeLuoguBind = changeLuoguBind;
     unsafeWindow.shareStd = shareStdPopup;
     unsafeWindow.shareCode = shareCodePopup;
+    unsafeWindow.sendToUser = sendToUser;
 
     function loadMapping() {
         GM_xmlhttpRequest({
@@ -344,7 +466,7 @@ window.addEventListener('load', async function() {
     }
     catch (e) {
         console.log(e);
-        createNotification("Localforage 未加载，可能是刷新过于频繁。", 3000, 1000, 'rgba(231, 76, 60, 0.8)')
+        createNotification("Localforage 未加载，可能是刷新过于频繁。", 3001, 1000, 'rgba(231, 76, 60, 0.8)')
     }
     //}, 200);
     //傻逼Monaco
@@ -400,13 +522,22 @@ window.addEventListener('load', async function() {
         notification.style.zIndex = '9999';
         notification.innerHTML = message;
         notification.style.whiteSpace = 'pre-wrap';
-
-        setTimeout(() => {
+        // 点击消失
+        notification.addEventListener('click', () => {
             notification.style.animation = 'fadeout ' + fadeoutTime / 1000 + 's ease forwards';
             notification.addEventListener('animationend', () => {
                 notification.remove();
             });
-        }, displayTime);
+        });
+
+        if (displayTime > 0) {
+            setTimeout(() => {
+                notification.style.animation = 'fadeout ' + fadeoutTime / 1000 + 's ease forwards';
+                notification.addEventListener('animationend', () => {
+                    notification.remove();
+                });
+            }, displayTime);
+        }
 
         notificationContainer.appendChild(notification);
     }
@@ -493,6 +624,9 @@ window.addEventListener('load', async function() {
         return await infoDb.getItem(name);
     }
 
+    unsafeWindow.setInfo = setInfo;
+    unsafeWindow.getInfo = getInfo;
+
     function changeAccount() {
         var tmp = getCookie("b-login-1");
         setCookie("login", getCookie("b-login-2"));
@@ -575,6 +709,10 @@ window.addEventListener('load', async function() {
                 <div class="field" id="popupTextbox">
                     <textarea style="resize: auto" class="popup-textbox" id="popupText" type="text" placeholder="请输入内容"></textarea>
                 </div>
+                <div class="field" id="popupDropdown">
+                    <select id="popupSelect">
+                    </select>
+                </div>
                 <div class="field" id="popupButtons">
                     <button id="confirmBtn">确定</button>
                     <button id="cancelBtn">取消</button>
@@ -583,43 +721,60 @@ window.addEventListener('load', async function() {
         </div>
     `;
 
+
     document.body.insertAdjacentHTML('beforeend', popupHTML);
 
     function processNewline(text) {
         return text.replace(/\n/g, '<br />');
     }
 
-    function openPopup(title, message, button = false, textbox = false, callback) {
+    function openPopup(title, message, button = false, textbox = false, dropdown = false, options = [], callback) {
         $('#popupTitle').text(title);
         $('#popupMessage').html(processNewline(message));
         $('#overlay').fadeIn();
         $('#popup').fadeIn();
-        if (button == true) $('#popupButtons').show();
+
+        if (button) $('#popupButtons').show();
         else $('#popupButtons').hide();
-        if (textbox == true) {
+
+        if (textbox) {
             $('#popupText').val('');
             $('#popupTextbox').show();
+        } else {
+            $('#popupTextbox').hide();
         }
-        else $('#popupTextbox').hide();
-        if (button == false && textbox == false) $('popupForm').hide();
+
+        if (dropdown) {
+            $('#popupSelect').empty();
+            options.forEach(option => {
+                $('#popupSelect').append(`<option value="${option.value}">${option.label}</option>`);
+            });
+            $('#popupDropdown').show();
+        } else {
+            $('#popupDropdown').hide();
+        }
+
+        if (!button && !textbox && !dropdown) $('#popupForm').hide();
 
         $('#confirmBtn').off("click");
         $('#cancelBtn').off("click");
 
         $('#confirmBtn').click(function() {
             if (callback && typeof callback === 'function') {
-                callback('confirmed', $('#popupText').val());
+                callback('confirmed', $('#popupText').val(), $('#popupSelect').val());
             }
             closePopup();
         });
 
         $('#cancelBtn').click(function() {
             if (callback && typeof callback === 'function') {
-                callback('canceled', $('#popupText').val());
+                callback('canceled', $('#popupText').val(), $('#popupSelect').val());
             }
             closePopup();
         });
     }
+
+    unsafeWindow.openPopup = openPopup;
 
     function closePopup() {
         $('#overlay').fadeOut();
@@ -641,7 +796,7 @@ window.addEventListener('load', async function() {
         return true;
     }
 
-    async function buildContestIndex(status, content) {
+    async function buildContestIndex(status, content, xxx) {
         if (status !== "confirmed") return;
         let id = await getInfo("last-build-contest");
         id = parseInt(id);
@@ -704,7 +859,7 @@ window.addEventListener('load', async function() {
         });
     }
 
-    async function buildProblemIndex(status, content) {
+    async function buildProblemIndex(status, content, xxx) {
         if (status !== "confirmed") return;
         let id = await getInfo("last-build-problem");
         id = parseInt(id);
@@ -771,6 +926,8 @@ window.addEventListener('load', async function() {
         var element = $("<a class=\"item\"><i class=\"repeat icon\"></i>切换账号</a>")
         var Telement = $("<a class=\"item\"><i class=\"info icon\"></i>Ver " + version + "</a>")
         var Selement = $("<a class=\"item\" onclick=\"window.shareCode()\"><i class=\"share icon\"></i>分享代码</a>")
+        var Nelement = $("<a class=\"item\" onclick=\"window.changeLuoguBind()\"><i class=\"linkify icon\"></i>绑定洛谷</a>")
+        var Celement = $("<a class=\"item\" onclick=\"window.sendToUser()\"><i class=\"send icon\"></i>发送消息</a>")
         element.click(() => {
             if (getCookie("b-login-2") == "") {
                 createNotification("切换失败！未找到上次登录记录。", 3000, 1000, 'rgba(231, 76, 60, 0.8)')
@@ -779,12 +936,14 @@ window.addEventListener('load', async function() {
             changeAccountWithPopup()
         });
         $(".ui.simple.dropdown.item div").prepend(element);
+        $(".ui.simple.dropdown.item div").prepend(Nelement);
+        $(".ui.simple.dropdown.item div").prepend(Celement);
         $(".ui.simple.dropdown.item div").prepend(Selement);
         $(".ui.simple.dropdown.item div").prepend(Telement);
     }
 
     if ($('div.header:contains("您没有权限进行此操作。")').length > 0) {
-        openPopup("权限检测", "检测到您没有权限访问此页面，是否希望切换到另一账号。", true, false, (status, content) => {
+        openPopup("权限检测", "检测到您没有权限访问此页面，是否希望切换到另一账号。", true, false, false, [], (status, content, xxx) => {
             if (status === "confirmed") {
                 setTimeout(changeAccountWithPopup, 350);
             }
@@ -830,11 +989,11 @@ window.addEventListener('load', async function() {
         if (await isAdmin()) {
             const element = $("<a href=\"javascript:void(0)\" class=\"ui mini labeled icon right floated button\" style=\"margin-left: 5px; \"> <i class=\"ui icon search\"></i> 构建索引 </a>");
             element.click(() => {
-                openPopup("构建索引", "是否确认构建题面索引？\n点击确定按钮后可以打开 F12 控制台查看情况。\n请不要刷新界面。", true, false, buildProblemIndex);
+                openPopup("构建索引", "是否确认构建题面索引？\n点击确定按钮后可以打开 F12 控制台查看情况。\n请不要刷新界面。", true, false, false, [], buildProblemIndex);
             });
             const clear = $("<a href=\"javascript:void(0)\" class=\"ui mini labeled icon right floated button\" style=\"margin-left: 5px; \"> <i class=\"ui icon delete\"></i> 清除数据 </a>");
             clear.click(() => {
-                openPopup("清除数据", "是否确认清除数据？\n这将导致所有缓存的内容丢失。", true, false, async (status, content) => {
+                openPopup("清除数据", "是否确认清除数据？\n这将导致所有缓存的内容丢失。", true, false, false, [], async (status, content, xxx) => {
                     if (status === "confirmed") {
                         problemDb.clear();
                         await setInfo("last-build-problem", 0);
@@ -844,7 +1003,7 @@ window.addEventListener('load', async function() {
             });
             const search = $("<a href=\"javascript:void(0)\" class=\"ui mini labeled icon right floated button\" style=\"margin-left: 5px; \"> <i class=\"ui icon search\"></i> 搜索题目 </a>");
             search.click(() => {
-                openPopup("搜索题目", "请在下方输入题面关键字。", true, true, (status, content) => {
+                openPopup("搜索题目", "请在下方输入题面关键字。", true, true, false, [], (status, content, xxx) => {
                     if (content == "") {
                         setTimeout(() => {openPopup("搜索题目", "题面关键字不可为空！")}, 350)
                     }
@@ -942,7 +1101,7 @@ window.addEventListener('load', async function() {
     unsafeWindow.copyContent = copyContent;
 
     function showPopupError(content) {
-        openPopup("出错了", content + "</br> 是否重新加载页面？", true, false, (status, content) => {
+        openPopup("出错了", content + "</br> 是否重新加载页面？", true, false, false, [], (status, content, xxx) => {
             if (status === "confirmed") {
                 location.reload();
             }
@@ -1078,11 +1237,11 @@ window.addEventListener('load', async function() {
         if (await isAdmin()) {
             const element = $("<a href=\"javascript:void(0)\" class=\"ui mini labeled icon right floated button\" style=\"margin-left: 5px; \"> <i class=\"ui icon search\"></i> 构建索引 </a>");
             element.click(() => {
-                openPopup("构建索引", "是否确认构建比赛索引？\n点击确定按钮后可以打开 F12 控制台查看情况。\n请不要刷新界面。", true, false, buildContestIndex);
+                openPopup("构建索引", "是否确认构建比赛索引？\n点击确定按钮后可以打开 F12 控制台查看情况。\n请不要刷新界面。", true, false, false, [], buildContestIndex);
             });
             const clear = $("<a href=\"javascript:void(0)\" class=\"ui mini labeled icon right floated button\" style=\"margin-left: 5px; \"> <i class=\"ui icon delete\"></i> 清除数据 </a>");
             clear.click(() => {
-                openPopup("清除数据", "是否确认清除数据？\n这将导致所有缓存的内容丢失。", true, false, async (status, content) => {
+                openPopup("清除数据", "是否确认清除数据？\n这将导致所有缓存的内容丢失。", true, false, false, [], async (status, content, xxx) => {
                     if (status === "confirmed") {
                         contestDb.clear();
                         await setInfo("last-build-contest", 0);
@@ -1092,7 +1251,7 @@ window.addEventListener('load', async function() {
             });
             const dec = $("<a href=\"javascript:void(0)\" class=\"ui mini labeled icon right floated button\" style=\"margin-left: 5px; \"> <i class=\"ui icon exchange\"></i> 解密 </a>");
             dec.click(() => {
-                openPopup("解密数据", "请在下方输入数据。", true, true, async (status, content) => {
+                openPopup("解密数据", "请在下方输入数据。", true, true, false, [], async (status, content, xxx) => {
                     if (status === "confirmed") {
                         try {
                             content = decrypt(content);
@@ -1261,7 +1420,10 @@ window.addEventListener('load', async function() {
                     vueApp.detailResult.judge.subtasks[sid].cases[tid].result.time = value;
                 }
                 const tv = vueApp.detailResult.judge.subtasks[0].cases[0].result.scoringRate;
-                vueApp.detailResult.judge.subtasks[0].cases[0].result.scoringRate = 0;
+                let nv;
+                if (tv == 0) nv = 1;
+                else nv = 0;
+                vueApp.detailResult.judge.subtasks[0].cases[0].result.scoringRate = nv;
                 vueApp.detailResult.judge.subtasks[0].cases[0].result.scoringRate = tv;
                 // 触发重绘
             }, 10);
