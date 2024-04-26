@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Better YCOJ
-// @version      1.2.5
+// @version      1.2.6
 // @description  更好的 YCOJ
 // @author       Aak
 // @match        http://10.1.143.113/*
@@ -38,7 +38,7 @@ let standardMapping = [];
 let contacts = [];
 const colorMap = ["#7F7F7F", "#FE4C61", "#F39C11", "#FFC116", "#52C41A", "#3498DB", "#9D3DCF", "#0E1D69", "#000000"];
 const diffMap = ["暂无评定", "入门", "普及−", "普及/提高−", "普及+/提高", "提高+/省选−", "省选/NOI−", "NOI/NOI+/CTSC", "<font color=\"red\">NOI++/CTSC+</font>"];
-const version = "1.2.5";
+const version = "1.2.6";
 const code300 = "#include<bits/stdc++.h>\nint main(){while(clock()*1.0/CLOCKS_PER_SEC<0.8){}int a,b;std::cin>>a>>b;std::cout<<a+b;}";
 let uid, clientId, csrf, myCsrf;
 
@@ -64,7 +64,7 @@ window.addEventListener('load', async function() {
                 type: "join_channel",
             }));
         };
-        ws.onmessage = (event) => {
+        ws.onmessage = async (event) => {
             const data = JSON.parse(event.data);
             switch (data._ws_type) {
                 case "server_broadcast": {
@@ -76,6 +76,10 @@ window.addEventListener('load', async function() {
                             if (!content.sender || !content.content) return;
                             createNotification(time + `\n来自` + content.sender + `：\n${content.content}`, 0, 1000, 'rgba(0, 0, 0, 0.8)');
                         }
+                    }
+                    else {
+                        if (message.receiver.uid == await getInfo("luogu-uid"))
+                            createNotification(time + `\n来自洛谷` + message.sender.name + `：\n${message.content}`, 0, 1000, 'rgba(0, 0, 0, 0.8)');
                     }
                     if (message.sender.uid == uid || message.receiver.uid == uid) {
                         deleteRecord(message.id);
@@ -733,17 +737,17 @@ window.addEventListener('load', async function() {
         $('#popupMessage').html(processNewline(message));
         $('#overlay').fadeIn();
         $('#popup').fadeIn();
-
+        
         if (button) $('#popupButtons').show();
         else $('#popupButtons').hide();
-
+        
         if (textbox) {
             $('#popupText').val('');
             $('#popupTextbox').show();
         } else {
             $('#popupTextbox').hide();
         }
-
+        
         if (dropdown) {
             $('#popupSelect').empty();
             options.forEach(option => {
@@ -753,7 +757,7 @@ window.addEventListener('load', async function() {
         } else {
             $('#popupDropdown').hide();
         }
-
+        
         if (!button && !textbox && !dropdown) $('#popupForm').hide();
 
         $('#confirmBtn').off("click");
