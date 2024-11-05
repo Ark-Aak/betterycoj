@@ -1023,9 +1023,20 @@ window.addEventListener('load', async function() {
             $('#add_problem_dropdown')
                 .parent()
                 .before(element)
-                .before(clear)
-                .after(search);
+                .before(clear);
         }
+        const search = $("<a href=\"javascript:void(0)\" class=\"ui mini labeled icon right floated button\" style=\"margin-left: 5px; \"> <i class=\"ui icon search\"></i> 搜索题目 </a>");
+        search.click(() => {
+            openPopup("搜索题目", "请在下方输入题面关键字。", true, true, false, [], (status, content, xxx) => {
+                if (content == "") {
+                    setTimeout(() => {openPopup("搜索题目", "题面关键字不可为空！")}, 350)
+                }
+                else {
+                    setTimeout(() => {searchProblemByContent(content)}, 350);
+                }
+            });
+        });
+        $('#add_problem_dropdown').after(search);
     }
 
     function searchSolutionByTitle(title) {
