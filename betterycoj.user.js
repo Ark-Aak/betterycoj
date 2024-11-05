@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Better YCOJ
-// @version      1.2.8
+// @version      1.2.9
 // @description  更好的 YCOJ
 // @author       Aak
 // @match        http://10.1.143.113/*
@@ -38,7 +38,7 @@ let standardMapping = [];
 let contacts = [];
 const colorMap = ["#7F7F7F", "#FE4C61", "#F39C11", "#FFC116", "#52C41A", "#3498DB", "#9D3DCF", "#0E1D69", "#000000"];
 const diffMap = ["暂无评定", "入门", "普及−", "普及/提高−", "普及+/提高", "提高+/省选−", "省选/NOI−", "NOI/NOI+/CTSC", "<font color=\"red\">NOI++/CTSC+</font>"];
-const version = "1.2.8";
+const version = "1.2.9";
 const code300 = "#include<bits/stdc++.h>\nint main(){while(clock()*1.0/CLOCKS_PER_SEC<0.8){}int a,b;std::cin>>a>>b;std::cout<<a+b;}";
 let uid, clientId, csrf, myCsrf;
 
@@ -558,6 +558,10 @@ window.addEventListener('load', async function() {
         return await userId() <= 2;
     }
 
+    const viewProblem = async() => {
+        return (await isAdmin()) || (await userId() == 171);
+    }
+
     const searchUser = async (username) => {
         await $.ajax({
             url: "/api/v2/search/users/" + username,
@@ -737,17 +741,17 @@ window.addEventListener('load', async function() {
         $('#popupMessage').html(processNewline(message));
         $('#overlay').fadeIn();
         $('#popup').fadeIn();
-        
+
         if (button) $('#popupButtons').show();
         else $('#popupButtons').hide();
-        
+
         if (textbox) {
             $('#popupText').val('');
             $('#popupTextbox').show();
         } else {
             $('#popupTextbox').hide();
         }
-        
+
         if (dropdown) {
             $('#popupSelect').empty();
             options.forEach(option => {
@@ -757,7 +761,7 @@ window.addEventListener('load', async function() {
         } else {
             $('#popupDropdown').hide();
         }
-        
+
         if (!button && !textbox && !dropdown) $('#popupForm').hide();
 
         $('#confirmBtn').off("click");
@@ -990,7 +994,7 @@ window.addEventListener('load', async function() {
                 tds.eq(2).prepend(download);
             }
         });
-        if (await isAdmin()) {
+        if (await viewProblem()) {
             const element = $("<a href=\"javascript:void(0)\" class=\"ui mini labeled icon right floated button\" style=\"margin-left: 5px; \"> <i class=\"ui icon search\"></i> 构建索引 </a>");
             element.click(() => {
                 openPopup("构建索引", "是否确认构建题面索引？\n点击确定按钮后可以打开 F12 控制台查看情况。\n请不要刷新界面。", true, false, false, [], buildProblemIndex);
