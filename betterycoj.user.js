@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Better YCOJ
-// @version      1.3.2
+// @version      1.3.3
 // @description  更好的 YCOJ
 // @author       Aak
 // @match        http://10.1.143.113/*
@@ -20,6 +20,7 @@
 // @require    https://cdn.jsdelivr.net/npm/jquery-color@2.2.0/dist/jquery.color.min.js
 // @require    https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js
 // @require    https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js
+// @require    https://cdn.jsdelivr.net/npm/pangu/dist/pangu.js
 // @run-at      document-start
 // ==/UserScript==
 
@@ -43,7 +44,7 @@ let standardMapping = [];
 let contacts = [];
 const colorMap = ["#7F7F7F", "#FE4C61", "#F39C11", "#FFC116", "#52C41A", "#3498DB", "#9D3DCF", "#0E1D69", "#000000"];
 const diffMap = ["暂无评定", "入门", "普及−", "普及/提高−", "普及+/提高", "提高+/省选−", "省选/NOI−", "NOI/NOI+/CTSC", "<font color=\"red\">NOI++/CTSC+</font>"];
-const version = "1.3.2";
+const version = "1.3.3";
 const code300 = "#include<bits/stdc++.h>\nint main(){while(clock()*1.0/CLOCKS_PER_SEC<0.8){}int a,b;std::cin>>a>>b;std::cout<<a+b;}";
 let uid, clientId, csrf, myCsrf;
 
@@ -64,7 +65,8 @@ const defaultSettings = {
     load_std: true,
     auto_change: true,
     remove_logo: true,
-    id_render: true
+    id_render: true,
+    rebuild_page: false
 };
 
 let settings = {
@@ -74,6 +76,7 @@ let settings = {
     auto_change: GM_getValue('auto_change', defaultSettings.auto_change),
     remove_logo: GM_getValue('remove_logo', defaultSettings.remove_logo),
     id_render: GM_getValue('id_render', defaultSettings.id_render),
+    rebuild_page: GM_getValue('rebuild_page', defaultSettings.rebuild_page),
 };
 
 function createMenu() {
@@ -83,6 +86,7 @@ function createMenu() {
     GM_registerMenuCommand(getMenuText("load_sol", "加载题解"), () => toggleOption("load_sol"));
     GM_registerMenuCommand(getMenuText("load_std", "加载标程"), () => toggleOption("load_std"));
     GM_registerMenuCommand(getMenuText("remove_logo", "移除左上角 Logo"), () => toggleOption("remove_logo"));
+    GM_registerMenuCommand(getMenuText("rebuild_page", "自动排版题目界面"), () => toggleOption("rebuild_page"));
     GM_registerMenuCommand(getMenuText("auto_change", "自动检测切换账号"), () => toggleOption("auto_change"));
     GM_registerMenuCommand(getMenuText("id_render", "提交记录链接渲染"), () => toggleOption("id_render"));
 }
@@ -1074,12 +1078,13 @@ window.addEventListener('load', async function() {
             if (value && value === searchString) {
                 key = key.split("sha256.")[1];
                 callback(key);
+                return;
             }
         }).catch(function (err) {
             callback(-1);
             console.error('Error searching:', err);
+            return;
         });
-        callback(0);
     }
 
     unsafeWindow.searchProblemByHash = searchProblemByHash;
@@ -1259,18 +1264,35 @@ window.addEventListener('load', async function() {
             xhr.send(formData);
         }
         let piId = setInterval(async () => {
+            function replaceSvg() {
+                const spansWithSvg = document.querySelectorAll('span svg');
+                spansWithSvg.forEach(svg => {
+                    const span = svg.closest('span');
+                    if (span) {
+                        const title = svg.querySelector('title');
+                        const titleText = title ? title.textContent : '';
+                        span.textContent = "$" + titleText + "$";
+                    }
+                });
+                $('#replaceSvg').hide();
+            }
+            unsafeWindow.replaceSvg = replaceSvg;
             if (!solutionLoaded || !standardLoaded) return;
             clearInterval(piId);
             if (!$("h1.ui.header")) return;
             const title = $("h1.ui.header")[0].innerText;
             const row = $($($.find("div.ui.grid")[1]).find("div.row")[1]);
             const hash = CryptoJS.SHA256((row.find("p")[0].innerHTML)).toString();
+            if (settings.rebuild_page) pangu.page_spacing();
             searchProblemByHash(hash, async function(res) {
-                if (res <= 0) return;
-                const dta = '<a class="small ui red button" href="/problem/' + res + '/testdata/download">下载数据</a>';
-                const btn = $(dta);
-                $('.ui.orange.button').before(btn);
-            })
+                if (res > 0) {
+                    const dta = '<a class="small ui red button" href="/problem/' + res + '/testdata/download">下载数据</a>';
+                    const btn = $(dta);
+                    $('.ui.orange.button').before(btn);
+                }
+            });
+            const viewLaTeX = $('<a id="replaceSvg" class="small ui gray button" onclick="window.replaceSvg()">显示 LaTeX</a>');
+            $('.ui.orange.button').before(viewLaTeX);
             let text = "<div class=\"row\"><div class=\"column\"><h4 class=\"ui top attached block header\">匹配的题解 <button id=\"copyhash\" class=\"ui labeled mini button\" onclick=\"window.copyContent('" + hash + "')\">复制摘要</button></h4><div class=\"ui bottom attached segment font-content\"><div style=\"position: relative; overflow: hidden; \">"
             let lst;
             if (solutionMapping.length < 1 || (minLen < 2)) {
