@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Better YCOJ
-// @version      1.2.9
+// @version      1.3.0
 // @description  更好的 YCOJ
 // @author       Aak
 // @match        http://10.1.143.113/*
@@ -38,7 +38,7 @@ let standardMapping = [];
 let contacts = [];
 const colorMap = ["#7F7F7F", "#FE4C61", "#F39C11", "#FFC116", "#52C41A", "#3498DB", "#9D3DCF", "#0E1D69", "#000000"];
 const diffMap = ["暂无评定", "入门", "普及−", "普及/提高−", "普及+/提高", "提高+/省选−", "省选/NOI−", "NOI/NOI+/CTSC", "<font color=\"red\">NOI++/CTSC+</font>"];
-const version = "1.2.9";
+const version = "1.3.0";
 const code300 = "#include<bits/stdc++.h>\nint main(){while(clock()*1.0/CLOCKS_PER_SEC<0.8){}int a,b;std::cin>>a>>b;std::cout<<a+b;}";
 let uid, clientId, csrf, myCsrf;
 
@@ -421,15 +421,7 @@ window.addEventListener('load', async function() {
         if (getCookie("login") !== "") return getCookie("b-userId");
         return "";
     }
-
-    function noCxqghzj() {
-        if (username == "cxqghzj") {
-            createNotification("唐氏儿。", 3000, 1000, 'rgba(231, 76, 60, 0.8)');
-            setCookie("login", "");
-        }
-    }
     checkUpdate();
-    //noCxqghzj();
     /*
     let intervalId = setInterval(() => {
         if(unsafeWindow.editor && "function" == typeof unsafeWindow.define && unsafeWindow.define.amd) {
@@ -741,6 +733,7 @@ window.addEventListener('load', async function() {
         $('#popupMessage').html(processNewline(message));
         $('#overlay').fadeIn();
         $('#popup').fadeIn();
+        $('#popupForm').show();
 
         if (button) $('#popupButtons').show();
         else $('#popupButtons').hide();
@@ -854,6 +847,18 @@ window.addEventListener('load', async function() {
         await setInfo("last-build-contest", id - 1);
     }
 
+    function render(input, id) {
+        $.post('/api/markdown', { s: input }, async function (s) {
+            try {
+                const data = CryptoJS.SHA256($(s).find("p")[0].innerHTML).toString();
+                await problemDb.setItem("sha256." + id, data);
+                console.log("[Problem Index] The hash of " + id + " is saved.");
+            } catch(e) {
+                console.log("[Problem Index] Empty statements, skipping...");
+            }
+        });
+    }
+
     async function getProblemContent(id) {
         await $.ajax({
             url: "/problem/" + id + "/edit",
@@ -862,7 +867,8 @@ window.addEventListener('load', async function() {
             success: async function (data) {
                 let text = $($(data).find("textarea")[0]).text();
                 await problemDb.setItem("content." + id, text);
-                console.log("problem " + id + " done.");
+                render(text, id);
+                console.log("[Problem Index] Statements of " + id + " are saved.");
             }
         });
     }
@@ -885,19 +891,19 @@ window.addEventListener('load', async function() {
                         count ++;
                         if (count >= 25) {
                             flg = false;
-                            console.log("problem index building finished.");
+                            console.log("[Problem Index] Finished!");
                         }
-                        console.log("count -> " + count);
+                        console.log("[Problem Index] Skipping... Count = " + count + ".");
                         return;
                     }
-                    console.log("getting problem " + id);
+                    console.log("[Problem Index] Loading problem " + id + "...");
                     count = 0;
                     await getProblemContent(this.url.split("/problem/")[1]);
                 }
             });
             if (!flg) break;
         }
-        await setInfo("last-build-problem", id - 1);
+        await setInfo("last-build-problem", id - 25);
     }
 
     function copyContent(content) {
@@ -950,7 +956,7 @@ window.addEventListener('load', async function() {
         $(".ui.simple.dropdown.item div").prepend(Telement);
     }
 
-    if ($('div.header:contains("您没有权限进行此操作。")').length > 0) {
+    if ($('div.header:contains("您没有权限进行此操作。")').length > 0 || $('div.header:contains("若您不在其中任何一个分组，您可能需要向管理员申请")').length > 0) {
         openPopup("权限检测", "检测到您没有权限访问此页面，是否希望切换到另一账号。", true, false, false, [], (status, content, xxx) => {
             if (status === "confirmed") {
                 setTimeout(changeAccountWithPopup, 350);
@@ -985,6 +991,21 @@ window.addEventListener('load', async function() {
 
     unsafeWindow.searchProblemByContent = searchProblemByContent;
 
+    function searchProblemByHash(searchString, callback) {
+        problemDb.iterate(function (value, key, iterationNumber) {
+            if (value && value === searchString) {
+                key = key.split("sha256.")[1];
+                callback(key);
+            }
+        }).catch(function (err) {
+            callback(-1);
+            console.error('Error searching:', err);
+        });
+        callback(0);
+    }
+
+    unsafeWindow.searchProblemByHash = searchProblemByHash;
+
     if (window.location.pathname.match(/\/problems\/?$/) && window.location.pathname.match(/^\/problems\/?/)) {
         $('tr').each(function() {
             const tds = $(this).find('td');
@@ -1006,17 +1027,6 @@ window.addEventListener('load', async function() {
                         problemDb.clear();
                         await setInfo("last-build-problem", 0);
                         createNotification("清除成功！", 3000, 1000, 'rgba(82, 196, 26, 0.8)');
-                    }
-                });
-            });
-            const search = $("<a href=\"javascript:void(0)\" class=\"ui mini labeled icon right floated button\" style=\"margin-left: 5px; \"> <i class=\"ui icon search\"></i> 搜索题目 </a>");
-            search.click(() => {
-                openPopup("搜索题目", "请在下方输入题面关键字。", true, true, false, [], (status, content, xxx) => {
-                    if (content == "") {
-                        setTimeout(() => {openPopup("搜索题目", "题面关键字不可为空！")}, 350)
-                    }
-                    else {
-                        setTimeout(() => {searchProblemByContent(content)}, 350);
                     }
                 });
             });
@@ -1160,7 +1170,6 @@ window.addEventListener('load', async function() {
                 setTimeout(() => {submitForm(formData, form.action)}, 500);
             });
         }
-
         function submitForm(formData, action) {
             var xhr = new XMLHttpRequest();
             xhr.open("POST", action, true);
@@ -1178,6 +1187,12 @@ window.addEventListener('load', async function() {
             const title = $("h1.ui.header")[0].innerText;
             const row = $($($.find("div.ui.grid")[1]).find("div.row")[1]);
             const hash = CryptoJS.SHA256((row.find("p")[0].innerHTML)).toString();
+            searchProblemByHash(hash, async function(res) {
+                if (res <= 0) return;
+                const dta = '<a class="small ui red button" href="/problem/' + res + '/testdata/download">下载数据</a>';
+                const btn = $(dta);
+                $('.ui.orange.button').before(btn);
+            })
             let text = "<div class=\"row\"><div class=\"column\"><h4 class=\"ui top attached block header\">匹配的题解 <button id=\"copyhash\" class=\"ui labeled mini button\" onclick=\"window.copyContent('" + hash + "')\">复制摘要</button></h4><div class=\"ui bottom attached segment font-content\"><div style=\"position: relative; overflow: hidden; \">"
             let lst;
             if (solutionMapping.length < 1 || (minLen < 2)) {
@@ -1321,6 +1336,12 @@ window.addEventListener('load', async function() {
                 displayConfig.showUsage = false;
             }
         }, 10);
+        const _item = $('a').filter(function() {
+            const href = $(this).attr('href');
+            return /\/contest\/\d+\/problem\/\d+/.test(href);
+        })[0];
+        const clink = $(_item).attr('href');
+        console.log(clink);
         if (token != null) {
             const loadSocketIO = function () {
                 let currentVersion = 0;
@@ -1530,7 +1551,6 @@ window.addEventListener('load', async function() {
                 async: true,
                 success: function(data) {
                     var error_code = data.error_code;
-                    //if ($("#username").val() == "cxqghzj") error_code = 1477;
                     switch (error_code) {
                         case 1001:
                             show_error("用户不存在");
@@ -1572,9 +1592,6 @@ window.addEventListener('load', async function() {
                             break;
                         case 1003:
                             show_error("您尚未设置密码，请通过下方「找回密码」来设置您的密码。");
-                            break;
-                        case 1477:
-                            show_error("你是唐氏儿");
                             break;
                         case 1:
                             MySuccess(data.session_id, 1, $("#username").val(), $("#password").val());
