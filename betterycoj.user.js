@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Better YCOJ
-// @version      1.3.1
+// @version      1.3.2
 // @description  更好的 YCOJ
 // @author       Aak
 // @match        http://10.1.143.113/*
@@ -36,12 +36,14 @@ const cookieId = "gueolbhc";
 const csrfId = "eihao3lm";
 const stdId = "iws3c1kp";
 const conId = "k8f5x4jb";
+const helpId = "f9dxtvco";
+let helpContent = "";
 let solutionMapping = [];
 let standardMapping = [];
 let contacts = [];
 const colorMap = ["#7F7F7F", "#FE4C61", "#F39C11", "#FFC116", "#52C41A", "#3498DB", "#9D3DCF", "#0E1D69", "#000000"];
 const diffMap = ["暂无评定", "入门", "普及−", "普及/提高−", "普及+/提高", "提高+/省选−", "省选/NOI−", "NOI/NOI+/CTSC", "<font color=\"red\">NOI++/CTSC+</font>"];
-const version = "1.3.1";
+const version = "1.3.2";
 const code300 = "#include<bits/stdc++.h>\nint main(){while(clock()*1.0/CLOCKS_PER_SEC<0.8){}int a,b;std::cin>>a>>b;std::cout<<a+b;}";
 let uid, clientId, csrf, myCsrf;
 
@@ -75,12 +77,24 @@ let settings = {
 };
 
 function createMenu() {
+    GM_registerMenuCommand("⚡ 插件使用帮助", () => openPopup("插件使用帮助", helpContent));
+    GM_registerMenuCommand("🧭 管理员账号密码", () => openPopup("管理员账号密码", "请找您已知的拥有管理员账号的同学申请。\n请保证您具有一定实力后再进行申请。", true));
     GM_registerMenuCommand(getMenuText("submit_p1", "2.4s 卡时"), () => toggleOption("submit_p1"));
     GM_registerMenuCommand(getMenuText("load_sol", "加载题解"), () => toggleOption("load_sol"));
     GM_registerMenuCommand(getMenuText("load_std", "加载标程"), () => toggleOption("load_std"));
     GM_registerMenuCommand(getMenuText("remove_logo", "移除左上角 Logo"), () => toggleOption("remove_logo"));
     GM_registerMenuCommand(getMenuText("auto_change", "自动检测切换账号"), () => toggleOption("auto_change"));
     GM_registerMenuCommand(getMenuText("id_render", "提交记录链接渲染"), () => toggleOption("id_render"));
+}
+
+function renderMd(input, callback) {
+    $.post('/api/markdown', { s: input }, async function (s) {
+        try {
+            callback(s);
+        } catch(e) {
+            console.error(e);
+        }
+    });
 }
 
 // 获取带状态的菜单文本
@@ -321,6 +335,15 @@ window.addEventListener('load', async function() {
                 getMyCSRFToken();
                 setInterval(getMyCSRFToken, 10000);
                 loadSocket();
+            }
+        });
+        GM_xmlhttpRequest({
+            url: "https://www.luogu.com/paste/" + helpId + "?_contentOnly=1",
+            method: "GET",
+            anonymous:  true,
+            onload: async function(xhr){
+                let data = JSON.parse(xhr.responseText).currentData.paste.data;
+                helpContent = data;
             }
         });
         GM_xmlhttpRequest({
@@ -742,40 +765,47 @@ window.addEventListener('load', async function() {
             cursor: pointer;border: 1px solid #ccc;
             background-color: #f9f9f9;border-radius: 3px;
         }
+        #popupContent {
+            max-height: 60vh;
+            overflow-y: auto;
+            min-width: 200px;
+        }
     `;
     document.head.appendChild(style);
 
     const popupHTML = `
-        <div id="overlay"></div>
-        <div id="popup">
-            <div id="closeBtn" class="closePopup"><i class=\"delete icon\"></i></div>
-            <div id="popupContent">
-                <h3 id="popupTitle" class="popupTitle"></h3>
-                <p id="popupMessage"></p>
+    <div id="overlay"></div>
+    <div id="popup">
+        <div id="closeBtn" class="closePopup"><i class=\"delete icon\"></i></div>
+        <div id="popupContent" style="margin-top:10px">
+            <h3 id="popupTitle" class="popupTitle"></h3>
+            <p id="popupMessage"></p>
+        </div>
+        <div class="ui form" id="popupForm" style="margin-top:5px">
+            <div class="field" id="popupTextbox">
+                <textarea style="resize: auto" class="popup-textbox" id="popupText" type="text" placeholder="请输入内容"></textarea>
             </div>
-            <div class="ui form" id="popupForm" style="margin-top:5px">
-                <div class="field" id="popupTextbox">
-                    <textarea style="resize: auto" class="popup-textbox" id="popupText" type="text" placeholder="请输入内容"></textarea>
-                </div>
-                <div class="field" id="popupDropdown">
-                    <select id="popupSelect">
-                    </select>
-                </div>
-                <div class="field" id="popupButtons">
-                    <button id="confirmBtn">确定</button>
-                    <button id="cancelBtn">取消</button>
-                </div>
+            <div class="field" id="popupDropdown">
+                <select id="popupSelect">
+                </select>
+            </div>
+            <div class="field" id="popupButtons">
+                <button id="confirmBtn">确定</button>
+                <button id="cancelBtn">取消</button>
             </div>
         </div>
-    `;
+    </div>
+`;
 
-
+    // 添加到页面中
     document.body.insertAdjacentHTML('beforeend', popupHTML);
 
+    // 处理换行
     function processNewline(text) {
         return text.replace(/\n/g, '<br />');
     }
 
+    // 打开弹窗
     function openPopup(title, message, button = false, textbox = false, dropdown = false, options = [], callback) {
         $('#popupTitle').text(title);
         $('#popupMessage').html(processNewline(message));
