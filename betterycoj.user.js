@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Better YCOJ
-// @version      1.3.0
+// @version      1.3.1
 // @description  更好的 YCOJ
 // @author       Aak
 // @match        http://10.1.143.113/*
@@ -9,6 +9,9 @@
 // @grant        GM_addStyle
 // @grant        unsafeWindow
 // @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_registerMenuCommand
 // @connect      luogu.com.cn
 // @connect      luogu.com
 // @connect      ark-aak.github.io
@@ -38,11 +41,12 @@ let standardMapping = [];
 let contacts = [];
 const colorMap = ["#7F7F7F", "#FE4C61", "#F39C11", "#FFC116", "#52C41A", "#3498DB", "#9D3DCF", "#0E1D69", "#000000"];
 const diffMap = ["暂无评定", "入门", "普及−", "普及/提高−", "普及+/提高", "提高+/省选−", "省选/NOI−", "NOI/NOI+/CTSC", "<font color=\"red\">NOI++/CTSC+</font>"];
-const version = "1.3.0";
+const version = "1.3.1";
 const code300 = "#include<bits/stdc++.h>\nint main(){while(clock()*1.0/CLOCKS_PER_SEC<0.8){}int a,b;std::cin>>a>>b;std::cout<<a+b;}";
 let uid, clientId, csrf, myCsrf;
 
 window.addEventListener('DOMContentLoaded', function() {
+    if (!settings.remove_logo) return;
     // 获取所有图片元素
     var headerImages = document.querySelectorAll('.header.item img');
         headerImages.forEach(function(image) {
@@ -51,6 +55,48 @@ window.addEventListener('DOMContentLoaded', function() {
 });
 
 let ws = null;
+
+const defaultSettings = {
+    submit_p1: true,
+    load_sol: true,
+    load_std: true,
+    auto_change: true,
+    remove_logo: true,
+    id_render: true
+};
+
+let settings = {
+    submit_p1: GM_getValue('submit_p1', defaultSettings.submit_p1),
+    load_sol: GM_getValue('load_sol', defaultSettings.load_sol),
+    load_std: GM_getValue('load_std', defaultSettings.load_std),
+    auto_change: GM_getValue('auto_change', defaultSettings.auto_change),
+    remove_logo: GM_getValue('remove_logo', defaultSettings.remove_logo),
+    id_render: GM_getValue('id_render', defaultSettings.id_render),
+};
+
+function createMenu() {
+    GM_registerMenuCommand(getMenuText("submit_p1", "2.4s 卡时"), () => toggleOption("submit_p1"));
+    GM_registerMenuCommand(getMenuText("load_sol", "加载题解"), () => toggleOption("load_sol"));
+    GM_registerMenuCommand(getMenuText("load_std", "加载标程"), () => toggleOption("load_std"));
+    GM_registerMenuCommand(getMenuText("remove_logo", "移除左上角 Logo"), () => toggleOption("remove_logo"));
+    GM_registerMenuCommand(getMenuText("auto_change", "自动检测切换账号"), () => toggleOption("auto_change"));
+    GM_registerMenuCommand(getMenuText("id_render", "提交记录链接渲染"), () => toggleOption("id_render"));
+}
+
+// 获取带状态的菜单文本
+function getMenuText(optionKey, description) {
+    const status = settings[optionKey] ? "✅" : "❌";
+    return `${status} ${description}`;
+}
+
+// 切换选项并更新菜单
+function toggleOption(optionKey) {
+    settings[optionKey] = !settings[optionKey];
+    GM_setValue(optionKey, settings[optionKey]);
+    location.reload(); // 可选：刷新页面来立即应用设置
+}
+
+createMenu();
 
 window.addEventListener('load', async function() {
     async function loadSocket() {
@@ -642,9 +688,12 @@ window.addEventListener('load', async function() {
 
     unsafeWindow.changeAccount = changeAccount;
 
-    $('.header.item img').each(function() {
-        $(this).replaceWith('<span style="font-family: \'Exo 2\'; font-size: 1.5em; font-weight: 600; ">YCOJ</span>');
-    });
+    if (settings.remove_logo) {
+        $('.header.item img').each(function() {
+            $(this).replaceWith('<span style="font-family: \'Exo 2\'; font-size: 1.5em; font-weight: 600; ">YCOJ</span>');
+        });
+    }
+
     let cookieWelcome = getCookie("b-welcome");
     if (cookieWelcome !== "true") {
         const customMessage = '欢迎使用 Better YCOJ';
@@ -658,7 +707,6 @@ window.addEventListener('load', async function() {
             from {opacity: 1;}
             to {opacity: 0;}
         }
-        .header.item img {display: none !important;}
         .notification-container {
             position: fixed;
             bottom: 20px;
@@ -956,7 +1004,7 @@ window.addEventListener('load', async function() {
         $(".ui.simple.dropdown.item div").prepend(Telement);
     }
 
-    if ($('div.header:contains("您没有权限进行此操作。")').length > 0 || $('div.header:contains("若您不在其中任何一个分组，您可能需要向管理员申请")').length > 0) {
+    if (settings.auto_change && ($('div.header:contains("您没有权限进行此操作。")').length > 0 || $('div.header:contains("若您不在其中任何一个分组，您可能需要向管理员申请")').length > 0)) {
         openPopup("权限检测", "检测到您没有权限访问此页面，是否希望切换到另一账号。", true, false, false, [], (status, content, xxx) => {
             if (status === "confirmed") {
                 setTimeout(changeAccountWithPopup, 350);
@@ -1153,7 +1201,7 @@ window.addEventListener('load', async function() {
     }
 
     function markRedirect() {
-        submitCode(1, code300, "cpp");
+        if (settings.submit_p1) submitCode(1, code300, "cpp");
         setCookie("b-redir-submission", true);
     }
 
@@ -1213,7 +1261,7 @@ window.addEventListener('load', async function() {
             });
             lst = searchStandardByHash(hash);
             let mtext = "<div class=\"row\"><div class=\"column\"><h4 class=\"ui top attached block header\">匹配的 std <button id=\"copyhash\" class=\"ui labeled mini button\" onclick=\"window.shareStd('" + hash + "')\">分享我的 std</button></h4><div class=\"ui bottom attached segment font-content\"><div style=\"position: relative; overflow: hidden; \">"
-            if (lst) {
+            if (lst && settings.load_std) {
                 if (inContest) mtext = mtext + "禁止在正常考试中查看。请在订正赛中查看。";
                 else {
                     for (let i = 0; i < lst.length; i++) {
@@ -1227,7 +1275,7 @@ window.addEventListener('load', async function() {
             }
             if (minLen == 2) lst = searchSolutionByTitle(title)
             else lst = searchSolutionByHash(hash)
-            if (lst) {
+            if (lst && settings.load_sol) {
                 if (inContest) text = text + "禁止在正常考试中查看。请在订正赛中查看。";
                 else {
                     for (let i = 0; i < lst.length; i++) {
@@ -1321,7 +1369,7 @@ window.addEventListener('load', async function() {
                     setCookie("b-redir-submission", false);
                     break;
                 }
-                element.innerHTML = "<a href = \"/contest/submission/" + id + "\">" + element.innerText + "</a>";
+                if (settings.id_render) element.innerHTML = "<a href = \"/contest/submission/" + id + "\">" + element.innerText + "</a>";
             }
         }
     }
