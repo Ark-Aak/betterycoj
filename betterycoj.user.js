@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Better YCOJ
-// @version      1.3.3
+// @version      1.3.4
 // @description  更好的 YCOJ
 // @author       Aak
 // @match        http://10.1.143.113/*
@@ -38,13 +38,14 @@ const csrfId = "eihao3lm";
 const stdId = "iws3c1kp";
 const conId = "k8f5x4jb";
 const helpId = "f9dxtvco";
+const articleId = "58";
 let helpContent = "";
 let solutionMapping = [];
 let standardMapping = [];
 let contacts = [];
 const colorMap = ["#7F7F7F", "#FE4C61", "#F39C11", "#FFC116", "#52C41A", "#3498DB", "#9D3DCF", "#0E1D69", "#000000"];
 const diffMap = ["暂无评定", "入门", "普及−", "普及/提高−", "普及+/提高", "提高+/省选−", "省选/NOI−", "NOI/NOI+/CTSC", "<font color=\"red\">NOI++/CTSC+</font>"];
-const version = "1.3.3";
+const version = "1.3.4";
 const code300 = "#include<bits/stdc++.h>\nint main(){while(clock()*1.0/CLOCKS_PER_SEC<0.8){}int a,b;std::cin>>a>>b;std::cout<<a+b;}";
 let uid, clientId, csrf, myCsrf;
 
@@ -1236,7 +1237,7 @@ window.addEventListener('load', async function() {
     }
 
     function markRedirect() {
-        if (settings.submit_p1) submitCode(1, code300, "cpp");
+        if (settings.submit_p1) submitCode(1, code300 + "//" + (new Date()), "cpp");
         setCookie("b-redir-submission", true);
     }
 
@@ -1250,7 +1251,8 @@ window.addEventListener('load', async function() {
                 markRedirect();
                 var form = document.getElementById("submit_code");
                 var formData = new FormData(form);
-                setTimeout(() => {submitForm(formData, form.action)}, 500);
+                //openPopup("提交成功", "正在重定向，请稍后");
+                setTimeout(() => {submitForm(formData, form.action)}, 600);
             });
         }
         function submitForm(formData, action) {
@@ -1417,8 +1419,9 @@ window.addEventListener('load', async function() {
             if (element.innerText.match(/#\d+/)) {
                 const id = element.innerText.match(/#(\d+)/)[1];
                 if (getCookie("b-redir-submission") == "true") {
-                    redirect("/contest/submission/" + id);
                     setCookie("b-redir-submission", false);
+                    setCookie("b-redir-comment", true);
+                    redirect("/contest/submission/" + id);
                     break;
                 }
                 if (settings.id_render) element.innerHTML = "<a href = \"/contest/submission/" + id + "\">" + element.innerText + "</a>";
@@ -1441,7 +1444,18 @@ window.addEventListener('load', async function() {
             return /\/contest\/\d+\/problem\/\d+/.test(href);
         })[0];
         const clink = $(_item).attr('href');
-        console.log(clink);
+        if (getCookie("b-redir-comment") === "true") {
+            $.ajax({
+                url: "/article/" + articleId + "/comment",
+                type: 'POST',
+                data: {
+                    "comment": "已提交 #" + id + "，题目 " + $("span.textFitted")[0].innerHTML + "。"
+                },
+                async: true,
+            });
+            setInfo("query." + id, 1);
+            setCookie("b-redir-comment", false);
+        }
         if (token != null) {
             const loadSocketIO = function () {
                 let currentVersion = 0;
@@ -1456,12 +1470,19 @@ window.addEventListener('load', async function() {
                         //console.log("Judge start! BetterYCOJ");
                         //vueApp.detailResult = {};
                         rcd = 1;
+                        $.ajax({
+                            url: "/article/" + articleId + "/comment",
+                            type: 'POST',
+                            data: {
+                                "comment": "#" + id + " 开始评测。"
+                            },
+                            async: true,
+                        });
                         displayConfig.showUsage = true;
                         displayConfig.inContest = false;
                     });
                     socket.on('update', function (p) {
                         if (rcd == 0) {
-                            socket.close();
                             return;
                         }
                         //console.log("Delta: ", p, " BetterYCOJ");
@@ -1498,6 +1519,7 @@ window.addEventListener('load', async function() {
                     socket.on('finish', function (p) {
                         if (rcd == 0) {
                             socket.close();
+                            setTimeout(() => {location.reload();}, 1000);
                             return;
                         }
                         //vueApp.roughData.running = false;
@@ -1537,6 +1559,18 @@ window.addEventListener('load', async function() {
             loadSocketIO();
         }
         else {
+            console.log(await getInfo("query." + id));
+            if (await getInfo("query." + id) === 1) {
+                infoDb.removeItem("query." + id);
+                $.ajax({
+                    url: "/article/" + articleId + "/comment",
+                    type: 'POST',
+                    data: {
+                        "comment": "#" + id + " 评测结束。"
+                    },
+                    async: true,
+                });
+            }
             setTimeout(async () => {
                 let data = await getSubmissionInfo(id);
                 if (data === null || data === undefined) return;
