@@ -1453,7 +1453,6 @@ window.addEventListener('load', async function() {
                 },
                 async: true,
             });
-            setInfo("query." + id, 1);
             setCookie("b-redir-comment", false);
         }
         if (token != null) {
@@ -1470,14 +1469,6 @@ window.addEventListener('load', async function() {
                         //console.log("Judge start! BetterYCOJ");
                         //vueApp.detailResult = {};
                         rcd = 1;
-                        $.ajax({
-                            url: "/article/" + articleId + "/comment",
-                            type: 'POST',
-                            data: {
-                                "comment": "#" + id + " 开始评测。"
-                            },
-                            async: true,
-                        });
                         displayConfig.showUsage = true;
                         displayConfig.inContest = false;
                     });
@@ -1559,18 +1550,6 @@ window.addEventListener('load', async function() {
             loadSocketIO();
         }
         else {
-            console.log(await getInfo("query." + id));
-            if (await getInfo("query." + id) === 1) {
-                infoDb.removeItem("query." + id);
-                $.ajax({
-                    url: "/article/" + articleId + "/comment",
-                    type: 'POST',
-                    data: {
-                        "comment": "#" + id + " 评测结束。"
-                    },
-                    async: true,
-                });
-            }
             setTimeout(async () => {
                 let data = await getSubmissionInfo(id);
                 if (data === null || data === undefined) return;
