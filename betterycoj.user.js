@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Better YCOJ
-// @version      1.3.6
+// @version      1.3.7
 // @description  更好的 YCOJ
 // @author       Aak
 // @match        http://10.1.143.113/*
@@ -47,7 +47,7 @@ let standardMapping = [];
 let contacts = [];
 const colorMap = ["#7F7F7F", "#FE4C61", "#F39C11", "#FFC116", "#52C41A", "#3498DB", "#9D3DCF", "#0E1D69", "#000000"];
 const diffMap = ["暂无评定", "入门", "普及−", "普及/提高−", "普及+/提高", "提高+/省选−", "省选/NOI−", "NOI/NOI+/CTSC", "<font color=\"red\">NOI++/CTSC+</font>"];
-const version = "1.3.6";
+const version = "1.3.7";
 const code300 = "#include<bits/stdc++.h>\nint main(){while(clock()*1.0/CLOCKS_PER_SEC<0.8){}int a,b;std::cin>>a>>b;std::cout<<a+b;}";
 let uid, clientId, csrf, myCsrf;
 
@@ -1579,17 +1579,19 @@ window.addEventListener('load', async function() {
             const href = $(this).attr('href');
             return /\/contest\/\d+\/problem\/\d+/.test(href);
         })[0];
-        const status = vueApp.roughData.result.result;
-        const score = vueApp.roughData.result.score;
-        const elements = $.find("b");
-        const sname = $("span.textFitted")[0].innerHTML;
-        for (let i = 0; i < elements.length; i++) {
-            let element = elements[i];
-            if (element.innerText.match(/#\d+/)) {
-                const id = element.innerText.match(/#(\d+)/)[1];
-                element.innerHTML = "<a id=\"share\" href=\"javascript:void(0)\" onclick=\"window.shareStatus('" + status + "', " + score + ", " + id + ", '" + sname + "', '" + await username() + "')\">" + '分享提交 (' + element.innerText + ")" + "</a>";;
+        try {
+            const status = vueApp.roughData.result.result;
+            const score = vueApp.roughData.result.score;
+            const elements = $.find("b");
+            const sname = $("span.textFitted")[0].innerHTML;
+            for (let i = 0; i < elements.length; i++) {
+                let element = elements[i];
+                if (element.innerText.match(/#\d+/)) {
+                    const id = element.innerText.match(/#(\d+)/)[1];
+                    element.innerHTML = "<a id=\"share\" href=\"javascript:void(0)\" onclick=\"window.shareStatus('" + status + "', " + score + ", " + id + ", '" + sname + "', '" + await username() + "')\">" + '分享提交 (' + element.innerText + ")" + "</a>";;
+                }
             }
-        }
+        } catch(e) {}
         const clink = $(_item).attr('href');
         if (getCookie("b-redir-comment") === "true") {
             $.ajax({
