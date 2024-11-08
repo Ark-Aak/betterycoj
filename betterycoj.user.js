@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Better YCOJ
-// @version      1.3.4
+// @version      1.3.5
 // @description  更好的 YCOJ
 // @author       Aak
 // @match        http://10.1.143.113/*
@@ -32,12 +32,14 @@ let solutionLoaded = false;
 let luoguLoaded = false;
 let standardLoaded = false;
 let minLen = 1000000000;
+let annoTime = 0;
 const pasteId = "aifqpqnw";
 const cookieId = "gueolbhc";
 const csrfId = "eihao3lm";
 const stdId = "iws3c1kp";
 const conId = "k8f5x4jb";
 const helpId = "f9dxtvco";
+const annoId = "anvbr2kt";
 const articleId = "58";
 let helpContent = "";
 let solutionMapping = [];
@@ -45,16 +47,15 @@ let standardMapping = [];
 let contacts = [];
 const colorMap = ["#7F7F7F", "#FE4C61", "#F39C11", "#FFC116", "#52C41A", "#3498DB", "#9D3DCF", "#0E1D69", "#000000"];
 const diffMap = ["暂无评定", "入门", "普及−", "普及/提高−", "普及+/提高", "提高+/省选−", "省选/NOI−", "NOI/NOI+/CTSC", "<font color=\"red\">NOI++/CTSC+</font>"];
-const version = "1.3.4";
+const version = "1.3.5";
 const code300 = "#include<bits/stdc++.h>\nint main(){while(clock()*1.0/CLOCKS_PER_SEC<0.8){}int a,b;std::cin>>a>>b;std::cout<<a+b;}";
 let uid, clientId, csrf, myCsrf;
 
 window.addEventListener('DOMContentLoaded', function() {
-    if (!settings.remove_logo) return;
-    // 获取所有图片元素
+    if (!settings.remove_logo && !settings.nav_logo) return;
     var headerImages = document.querySelectorAll('.header.item img');
         headerImages.forEach(function(image) {
-        image.src = ''; // 将图片的 src 设置为空字符串，阻止加载
+        image.src = settings.nav_logo;
     });
 });
 
@@ -67,7 +68,10 @@ const defaultSettings = {
     auto_change: true,
     remove_logo: true,
     id_render: true,
-    rebuild_page: false
+    rebuild_page: false,
+    submit_waiting: 600,
+    nav_logo: '',
+    magic_msg: true
 };
 
 let settings = {
@@ -78,15 +82,21 @@ let settings = {
     remove_logo: GM_getValue('remove_logo', defaultSettings.remove_logo),
     id_render: GM_getValue('id_render', defaultSettings.id_render),
     rebuild_page: GM_getValue('rebuild_page', defaultSettings.rebuild_page),
+    submit_waiting: GM_getValue('submit_waiting', defaultSettings.submit_waiting),
+    nav_logo: GM_getValue('nav_logo', defaultSettings.nav_logo),
+    magic_msg: GM_getValue('magic_msg', defaultSettings.magic_msg),
 };
 
 function createMenu() {
     GM_registerMenuCommand("⚡ 插件使用帮助", () => openPopup("插件使用帮助", helpContent));
     GM_registerMenuCommand("🧭 管理员账号密码", () => openPopup("管理员账号密码", "请找您已知的拥有管理员账号的同学申请。\n请保证您具有一定实力后再进行申请。", true));
+    GM_registerMenuCommand(getInputMenuText("nav_logo", "✨ 导航栏 Logo（%val%）", (optionKey) => (settings[optionKey] ? "已启用" : "已禁用")), () => inputOption("nav_logo", "导航栏图标网址（77×47px，留空或取消则禁用）", true));
+    GM_registerMenuCommand(getInputMenuText("submit_waiting", "⏱ 提交等待时间（%val%ms）"), () => inputOption("submit_waiting", "提交等待时间"));
     GM_registerMenuCommand(getMenuText("submit_p1", "2.4s 卡时"), () => toggleOption("submit_p1"));
     GM_registerMenuCommand(getMenuText("load_sol", "加载题解"), () => toggleOption("load_sol"));
     GM_registerMenuCommand(getMenuText("load_std", "加载标程"), () => toggleOption("load_std"));
-    GM_registerMenuCommand(getMenuText("remove_logo", "移除左上角 Logo"), () => toggleOption("remove_logo"));
+    GM_registerMenuCommand(getMenuText("magic_msg", "神秘横幅"), () => toggleOption("magic_msg"));
+    if (!settings.nav_logo) GM_registerMenuCommand(getMenuText("remove_logo", "移除导航栏 Logo"), () => toggleOption("remove_logo"));
     GM_registerMenuCommand(getMenuText("rebuild_page", "自动排版题目界面"), () => toggleOption("rebuild_page"));
     GM_registerMenuCommand(getMenuText("auto_change", "自动检测切换账号"), () => toggleOption("auto_change"));
     GM_registerMenuCommand(getMenuText("id_render", "提交记录链接渲染"), () => toggleOption("id_render"));
@@ -112,10 +122,97 @@ function getMenuText(optionKey, description) {
 function toggleOption(optionKey) {
     settings[optionKey] = !settings[optionKey];
     GM_setValue(optionKey, settings[optionKey]);
-    location.reload(); // 可选：刷新页面来立即应用设置
+    location.reload();
+}
+
+function getInputMenuText(optionKey, description, func = (optionKey) => settings[optionKey]) {
+    return description.replaceAll("%val%", func(optionKey));
+}
+
+function inputOption(optionKey, msg, str = false) {
+    const val = prompt("请输入 " + msg + " 的新值：");
+    settings[optionKey] = str ? val : (parseInt(val) | 0);
+    GM_setValue(optionKey, settings[optionKey]);
+    if (optionKey === "nav_logo" && val && settings.remove_logo) {
+        toggleOption("remove_logo");
+    }
+    location.reload();
 }
 
 createMenu();
+
+var currentTop = 10; // Initial position (10% of screen height)
+var banners = []; // Array to keep track of all banners
+
+// Function to create a scrolling banner
+function createScrollingBanner(text) {
+    // Create the banner element
+    var banner = document.createElement('div');
+    banner.style.position = 'fixed';
+    banner.style.top = currentTop + 'vh';  // Position dynamically based on `currentTop`
+    banner.style.left = '50%';
+    banner.style.width = '70%';  // Set width to 70% of screen width
+    banner.style.height = '40px';  // Adjust the height as needed
+    banner.style.transform = 'translateX(-50%)';  // Center the banner horizontally
+    banner.style.background = 'linear-gradient(to left, rgba(226, 194, 44, 0), rgba(226, 194, 44, 0.7) 50%, rgba(226, 194, 44, 0))'; // Red color with fading edges on both sides
+    banner.style.zIndex = '9999';  // Ensure the banner is on top
+    banner.style.textAlign = 'center';
+    banner.style.lineHeight = '40px'; // Center the text vertically
+    banner.style.color = 'rgb(247, 31, 0)';
+    banner.style.fontSize = '18px';
+    banner.style.whiteSpace = 'nowrap'; // Prevent the text from wrapping
+    banner.style.overflow = 'hidden'; // Hide the overflow text
+
+    // Create a span to hold the scrolling text
+    var bannerText = document.createElement('span');
+    bannerText.innerHTML = text;  // Use the passed text
+    bannerText.style.display = 'inline-block'; // Make it inline to allow scrolling
+    bannerText.style.animation = 'scrollText 12s linear infinite';  // Apply animation to scroll text
+
+    // Add the text to the banner
+    banner.appendChild(bannerText);
+
+    // Add a click event listener to make the banner disappear when clicked
+    banner.addEventListener('click', function() {
+        // Remove the banner from the DOM
+        banner.style.display = 'none';
+
+        // Adjust the top position of the remaining banners to fill the gap
+        for (let i = banners.indexOf(banner) + 1; i < banners.length; i++) {
+            let nextBanner = banners[i];
+            let currentTop = parseFloat(nextBanner.style.top);
+            nextBanner.style.top = (currentTop - 5) + 'vh';  // Move up by 5vh
+        }
+
+        // Remove the banner from the array
+        banners.splice(banners.indexOf(banner), 1);
+    });
+
+    // Append the banner to the body
+    document.body.appendChild(banner);
+
+    // Add the banner to the array to keep track of it
+    banners.push(banner);
+
+    // Update the `currentTop` value to position the next banner below the current one
+    currentTop += 5;  // Adjust this value if you want more or less space between banners
+}
+
+unsafeWindow.createScrollingBanner = createScrollingBanner;
+
+// Add the CSS animation to the document's head for scrolling effect
+var style = document.createElement('style');
+style.innerHTML = `
+        @keyframes scrollText {
+            0% {
+                transform: translateX(52vw);  /* Start from right side of screen */
+            }
+            100% {
+                transform: translateX(-52vw); /* Move completely off the left side of the screen */
+            }
+        }
+    `;
+document.head.appendChild(style);
 
 window.addEventListener('load', async function() {
     async function loadSocket() {
@@ -359,6 +456,31 @@ window.addEventListener('load', async function() {
                 contacts = JSON.parse(JSON.parse(xhr.responseText).currentData.paste.data);
             }
         });
+        if (settings.magic_msg) {
+            setInterval(() => {
+                GM_xmlhttpRequest({
+                    url: "https://www.luogu.com/paste/" + annoId + "?_contentOnly=1",
+                    method: "GET",
+                    anonymous:  true,
+                    onload: async function(xhr){
+                        let data = JSON.parse(xhr.responseText).currentData.paste.data;
+                        data = data.split('\n\n');
+                        let lsttime = annoTime, mxtime = 0;
+                        if (!lsttime) lsttime = 0;
+                        for (let str of data) {
+                            if (str.length < 1) continue;
+                            if (str[0] === '#') continue;
+                            str = str.split('#@#');
+                            if (parseInt(str[4]) < lsttime) continue;
+                            if (parseInt(str[4]) > mxtime) mxtime = parseInt(str[4]);
+                            const msg = "（点击消失）喜报！" + str[3] + " 在 " + str[2] + " 中取得了 " + str[0] + " " + str[1] + " 分的好成绩！";
+                            createScrollingBanner(msg);
+                        }
+                        if (mxtime) annoTime = mxtime + 1000;
+                    }
+                });
+            }, 8000);
+        }
     }
 
     function shareCode(content, callback) {
@@ -1247,12 +1369,15 @@ window.addEventListener('load', async function() {
         const cid = window.location.pathname.match(/\/contest\/(\d+)\/problem\/\d+\/?$/)[1];
         if (document.getElementById("submit_code")) {
             document.getElementById("submit_code").addEventListener("submit", function(event) {
+                document.querySelectorAll('button[type="submit"]').forEach(button => {
+                    button.disabled = true;
+                });
                 event.preventDefault();
                 markRedirect();
                 var form = document.getElementById("submit_code");
                 var formData = new FormData(form);
                 //openPopup("提交成功", "正在重定向，请稍后");
-                setTimeout(() => {submitForm(formData, form.action)}, 600);
+                setTimeout(() => {submitForm(formData, form.action)}, settings.submit_waiting);
             });
         }
         function submitForm(formData, action) {
@@ -1429,6 +1554,15 @@ window.addEventListener('load', async function() {
         }
     }
 
+    function shareStatus(str, score, pid, pname, username) {
+        $("#share").prop("onclick", null)
+        createNotification("正在分享...\n若无效请稍后再试！");
+        addToPaste(annoId, str + "#@#" + score + "#@#" + pname + "#@#" + username + "#@#" + Date.parse(new Date()), (ignore1, ignore2) => {});
+        setTimeout(() => location.reload(), 1500);
+    }
+
+    unsafeWindow.shareStatus = shareStatus;
+
     if (window.location.pathname.match(/\/contest\/submission\/(\d+)/)) {
         const id = parseInt(window.location.pathname.match(/\/contest\/submission\/(\d+)/)[1]);
         displayConfig.showUsage = true;
@@ -1443,6 +1577,17 @@ window.addEventListener('load', async function() {
             const href = $(this).attr('href');
             return /\/contest\/\d+\/problem\/\d+/.test(href);
         })[0];
+        const status = vueApp.roughData.result.result;
+        const score = vueApp.roughData.result.score;
+        const elements = $.find("b");
+        const sname = $("span.textFitted")[0].innerHTML;
+        for (let i = 0; i < elements.length; i++) {
+            let element = elements[i];
+            if (element.innerText.match(/#\d+/)) {
+                const id = element.innerText.match(/#(\d+)/)[1];
+                element.innerHTML = "<a id=\"share\" href=\"javascript:void(0)\" onclick=\"window.shareStatus('" + status + "', " + score + ", " + id + ", '" + sname + "', '" + await username() + "')\">" + '分享提交 (' + element.innerText + ")" + "</a>";;
+            }
+        }
         const clink = $(_item).attr('href');
         if (getCookie("b-redir-comment") === "true") {
             $.ajax({
