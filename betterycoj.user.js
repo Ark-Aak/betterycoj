@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         Better YCOJ
-// @version      1.3.7
+// @version      1.3.8
 // @description  更好的 YCOJ
 // @author       Aak
-// @match        http://10.1.143.113/*
-// @namespace    http://10.1.143.113
+// @match        http://cqyc.com:2222/*
+// @namespace    http://cqyc.com:2222
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=143.113
 // @grant        GM_addStyle
 // @grant        unsafeWindow
@@ -47,7 +47,7 @@ let standardMapping = [];
 let contacts = [];
 const colorMap = ["#7F7F7F", "#FE4C61", "#F39C11", "#FFC116", "#52C41A", "#3498DB", "#9D3DCF", "#0E1D69", "#000000"];
 const diffMap = ["暂无评定", "入门", "普及−", "普及/提高−", "普及+/提高", "提高+/省选−", "省选/NOI−", "NOI/NOI+/CTSC", "<font color=\"red\">NOI++/CTSC+</font>"];
-const version = "1.3.7";
+const version = "1.3.8";
 const code300 = "#include<bits/stdc++.h>\nint main(){while(clock()*1.0/CLOCKS_PER_SEC<0.8){}int a,b;std::cin>>a>>b;std::cout<<a+b;}";
 let uid, clientId, csrf, myCsrf;
 
@@ -1353,7 +1353,7 @@ window.addEventListener('load', async function() {
 
         GM_xmlhttpRequest({
             method: "POST",
-            url: "http://10.1.143.113/problem/" + id + "/submit?contest_id=",
+            url: "http://cqyc.com:2222/problem/" + id + "/submit?contest_id=",
             data: formData,
             onload: function(response) {
             }
